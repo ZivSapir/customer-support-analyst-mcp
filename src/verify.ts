@@ -8,7 +8,12 @@ import {
   SOURCE_REVISION,
 } from "./dataset.js";
 import { INGEST_MANIFEST_PATH } from "./db.js";
-import { executeReadOnlyQuery, MAX_SQL_ROWS } from "./query.js";
+import {
+  executeReadOnlyQuery,
+  MAX_FIELD_CHARS,
+  MAX_RESULT_BYTES,
+  MAX_SQL_ROWS,
+} from "./query.js";
 import { getTicketSchema } from "./schema.js";
 import { searchMetrics, searchTickets } from "./search.js";
 import { validateReadOnlySql, wrapWithRowLimit } from "./sql-guard.js";
@@ -177,6 +182,50 @@ async function main(): Promise<void> {
   );
   console.log(
     `exact ${MAX_SQL_ROWS}: returnedRowCount=${exact.returnedRowCount} truncated=${exact.truncated}`,
+  );
+
+  const fatGuard = validateReadOnlySql(
+    "SELECT repeat('A', 5000) AS big FROM tickets LIMIT 1",
+  );
+  if (!fatGuard.ok) {
+    throw new Error(fatGuard.error);
+  }
+  const fat = await executeReadOnlyQuery(
+    wrapWithRowLimit(fatGuard.sql, MAX_SQL_ROWS),
+  );
+  const big = String(fat.rows[0]?.big ?? "");
+  assert(big.length <= MAX_FIELD_CHARS, "fat string field should be capped");
+  assert(big.endsWith("…[truncated]"), "fat string should include truncate marker");
+  assert(fat.truncated, "field truncation should set truncated=true");
+  assert(
+    fat.truncationReasons.includes("fields"),
+    "truncationReasons should include fields",
+  );
+  console.log(
+    `field cap: length=${big.length} reasons=${fat.truncationReasons.join(",")}`,
+  );
+
+  const payloadGuard = validateReadOnlySql(
+    "SELECT repeat('B', 1800) AS chunk FROM tickets LIMIT 80",
+  );
+  if (!payloadGuard.ok) {
+    throw new Error(payloadGuard.error);
+  }
+  const bulky = await executeReadOnlyQuery(
+    wrapWithRowLimit(payloadGuard.sql, MAX_SQL_ROWS),
+  );
+  const bulkyJson = JSON.stringify(bulky, null, 2);
+  assert(
+    Buffer.byteLength(bulkyJson, "utf8") <= MAX_RESULT_BYTES,
+    "serialized result should respect MAX_RESULT_BYTES",
+  );
+  assert(
+    bulky.truncationReasons.includes("payload") ||
+      bulky.returnedRowCount < 80,
+    "bulky result should hit payload truncation or drop rows",
+  );
+  console.log(
+    `payload cap: returnedRowCount=${bulky.returnedRowCount} bytes=${Buffer.byteLength(bulkyJson, "utf8")} reasons=${bulky.truncationReasons.join(",")}`,
   );
 
   const hits = await searchTickets({ query: "refund", k: 3 });
