@@ -61,7 +61,8 @@ This file is the source of truth for the design document.
 | --- | --- |
 | `get_schema` | First call — columns, sample values, SQL vs search routing |
 | `query_tickets` | Counts, group-bys, structured filters (read-only SQL) |
-| `search_tickets` | Customer wording, themes, paraphrases (BM25 FTS) |
+| `search_tickets` | Customer wording examples (BM25 FTS); optional structured filters |
+| `search_metrics` | Lexical FTS match counts / group-bys for free-text themes |
 
 ### Deliberately out of scope (v1)
 
@@ -232,6 +233,38 @@ A warehouse role that can only `SELECT` on allowlisted views is stronger than a 
 ### Production note
 
 English Porter stemming is weaker on German tickets. A production CHEQ pipeline would use language-specific analyzers (or a warehouse search service) and still keep aggregates on SQL.
+
+---
+
+## Milestone 5b — FTS filters + `search_metrics` (2026-08-13)
+
+**Goal:** Close the SQL↔FTS hole for questions that need both free-text matching and real volumes (or filtered examples).
+
+### What we built
+
+- Extended `search_tickets` with optional `priority` / `queue` / `type` (plus existing `language`)
+- New tool `search_metrics(query, filters?, group_by?)` — same BM25 match predicate, `COUNT(*)` / `GROUP BY`
+
+### Decisions made
+
+| Decision | Why |
+| --- | --- |
+| Dedicated `search_metrics` (not reusing top-k `resultCount`) | Keeps examples vs census semantics explicit |
+| Honest “lexical FTS match” wording in the tool result | Avoids pretending BM25 ≡ human theme labeling |
+| Allowlisted `group_by` columns only | Same structured fields as filters; no free-text GROUP BY |
+| Keep `query_tickets` for structured-only aggregates | Clear routing: typed columns → SQL; theme volume → FTS metrics |
+
+### Rejected
+
+| Option | Verdict |
+| --- | --- |
+| Tell the host to `LIKE` themes in `query_tickets` | Weaker matcher; defeats the FTS index |
+| Inflate `search_tickets` k and treat hits as volume | Still a sample, easy to misuse |
+| Embeddings / classifier labels for “refund” | Out of v1 (no server model); different product |
+
+### Production note
+
+At scale, the same split holds: search service for match sets, warehouse SQL for governed aggregates — or a single metrics API that joins both under an audited query plan.
 
 ---
 

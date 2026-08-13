@@ -1,6 +1,6 @@
 import { executeReadOnlyQuery, MAX_SQL_ROWS } from "./query.js";
 import { getTicketSchema } from "./schema.js";
-import { searchTickets } from "./search.js";
+import { searchMetrics, searchTickets } from "./search.js";
 import { validateReadOnlySql, wrapWithRowLimit } from "./sql-guard.js";
 
 function assert(condition: boolean, message: string): void {
@@ -35,6 +35,34 @@ async function main(): Promise<void> {
   const hits = await searchTickets({ query: "refund", k: 3 });
   assert(hits.length > 0, "search_tickets('refund') should return hits");
   console.log(`search_tickets refund hits: ${hits.length} (top id ${hits[0]?.ticket_id})`);
+
+  const filtered = await searchTickets({
+    query: "refund",
+    k: 5,
+    priority: "high",
+  });
+  assert(
+    filtered.every((hit) => hit.priority === "high"),
+    "search_tickets priority filter should only return high",
+  );
+  console.log(`search_tickets refund+high hits: ${filtered.length}`);
+
+  const metrics = await searchMetrics({ query: "refund" });
+  assert(metrics.match_count > 0, "search_metrics('refund') should be > 0");
+  assert(
+    metrics.match_count >= hits.length,
+    "FTS match_count should be >= top-k hit count",
+  );
+  console.log(`search_metrics refund match_count: ${metrics.match_count}`);
+
+  const byQueue = await searchMetrics({
+    query: "refund",
+    group_by: "queue",
+  });
+  assert(byQueue.groups.length > 0, "search_metrics group_by queue should return groups");
+  console.log(
+    `search_metrics refund by queue: ${byQueue.groups.length} groups (total ${byQueue.match_count})`,
+  );
 
   console.log("verify ok");
 }
