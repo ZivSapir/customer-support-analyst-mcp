@@ -12,6 +12,8 @@ export const CSV_PATH = path.join(DATA_DIR, "tickets.csv");
 
 type CreateDatabaseOptions = {
   readOnly?: boolean;
+  /** When false (default for read-only tools that run host SQL), block FS/network table functions. */
+  enableExternalAccess?: boolean;
 };
 
 export async function assertDatabaseExists(): Promise<void> {
@@ -28,17 +30,33 @@ export function createDatabase(
   options: CreateDatabaseOptions = {},
 ): duckdb.Database {
   if (options.readOnly) {
-    return new duckdb.Database(DB_PATH, duckdb.OPEN_READONLY);
+    // READ_ONLY: do not mutate the .duckdb file.
+    // enable_external_access=false: block read_csv/etc. against the host FS.
+    // Search needs FTS LOAD, so that path opts back into external access.
+    const enableExternalAccess = options.enableExternalAccess === true;
+
+    return new duckdb.Database(DB_PATH, {
+      access_mode: "READ_ONLY",
+      enable_external_access: enableExternalAccess ? "true" : "false",
+    });
   }
 
   return new duckdb.Database(DB_PATH);
 }
 
+type ReadOnlyConnectionOptions = {
+  enableExternalAccess?: boolean;
+};
+
 export async function withReadOnlyConnection<T>(
   fn: (conn: duckdb.Connection) => Promise<T>,
+  options: ReadOnlyConnectionOptions = {},
 ): Promise<T> {
   await assertDatabaseExists();
-  const db = createDatabase({ readOnly: true });
+  const db = createDatabase({
+    readOnly: true,
+    enableExternalAccess: options.enableExternalAccess,
+  });
   const conn = connect(db);
 
   try {
