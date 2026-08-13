@@ -10,9 +10,10 @@ The **host** (Cursor, Claude Code, or Codex) handles natural language. This proc
 | --- | --- |
 | `get_schema` | Columns, allowed filter values, SQL vs search routing |
 | `query_tickets` | Counts, group-bys, structured filters (read-only SQL) |
-| `search_tickets` | Customer wording and themes (BM25 full-text search) |
+| `search_tickets` | Customer wording examples (BM25); optional structured filters |
+| `search_metrics` | FTS match counts / group-bys for free-text themes |
 
-Counts come from SQL execution, not from model memory. Search hits are ranked examples, not volume.
+Structured counts come from `query_tickets`. Theme volumes come from `search_metrics` (lexical FTS matches). `search_tickets` hits are ranked examples, not volume.
 
 Dataset: [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (downloaded once at ingest).
 
@@ -59,7 +60,7 @@ User or project config (`.cursor/mcp.json` / `~/.cursor/mcp.json`):
 }
 ```
 
-You should see `get_schema`, `query_tickets`, and `search_tickets`.
+You should see `get_schema`, `query_tickets`, `search_tickets`, and `search_metrics`.
 
 ### Claude Code
 
@@ -80,8 +81,11 @@ Example file: [mcp.config.example.json](./mcp.config.example.json).
 | Breakdown by language and priority | `query_tickets` |
 | What are customers saying about refunds? | `search_tickets` |
 | Password-reset complaints in German | `search_tickets` with `language: "de"` |
+| How many tickets mention refunds? | `search_metrics` |
+| High-priority tickets about password resets (examples) | `search_tickets` with filters |
+| Which queues have the most refund matches? | `search_metrics` with `group_by: "queue"` |
 
-Optional MCP prompt: `ticket-analyst` (reminds the host: schema first, SQL for counts, search for wording).
+Optional MCP prompt: `ticket-analyst` (schema first; SQL for structured counts; FTS examples + metrics for wording).
 
 Full list: [eval/questions.json](./eval/questions.json).
 
