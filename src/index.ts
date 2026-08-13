@@ -116,7 +116,7 @@ server.registerTool(
   {
     title: "Search tickets (full text)",
     description:
-      "BM25 search over subject and body. Use for themes, paraphrases, and customer wording. Returns ranked examples (max 20) — not volume. Optional structured filters: language, priority, queue, type. For match counts use search_metrics. Call get_schema first.",
+      "Lexical BM25 full-text search over subject and body (tokenization + stemming + ranking). Use for keyword/topic discovery and morphologically related wording — not semantic paraphrases (e.g. refund ≠ money back). Returns ranked examples (max 20), not volume. Optional filters: language, priority, queue, type. For match counts use search_metrics. Call get_schema first.",
     inputSchema: {
       query: z
         .string()
@@ -205,7 +205,7 @@ server.registerPrompt(
   {
     title: "Support ticket analyst",
     description:
-      "Guides the host model: get_schema first, SQL for structured counts, FTS for wording, search_metrics for theme volumes.",
+      "Guides the host model: get_schema first, SQL for structured counts, lexical FTS for wording, search_metrics for match volumes.",
     argsSchema: {
       focus: z
         .string()
@@ -224,8 +224,8 @@ server.registerPrompt(
             "Workflow:",
             "1. Call get_schema before the first query.",
             "2. Use query_tickets for structured counts, group-bys, and exact column filters.",
-            "3. Use search_tickets for customer wording examples (ranked hits, not volume).",
-            "4. Use search_metrics when a question needs how many tickets match a free-text theme (optional filters / group_by).",
+            "3. Use search_tickets for lexical keyword/topic examples (ranked hits, not volume; not semantic paraphrase search).",
+            "4. Use search_metrics when a question needs how many tickets lexically match a free-text query (optional filters / group_by).",
             "5. Never guess numeric answers; run a tool for every aggregate.",
             "6. Never treat search_tickets resultCount as a volume statistic.",
             "7. Cite ticket_id when summarizing search hits.",

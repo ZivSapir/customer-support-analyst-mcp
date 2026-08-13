@@ -1,6 +1,6 @@
 # Milestone 5 — search tools (FTS)
 
-Goal: find tickets by customer wording, and count how many match — without treating top-k hits as volume.
+Goal: find tickets by **lexical** customer wording, and count how many match — without treating top-k hits as volume or claiming semantic paraphrase search.
 
 ## What we added
 
@@ -15,21 +15,23 @@ Goal: find tickets by customer wording, and count how many match — without tre
   - same optional structured filters
 - `src/search.ts` — `LOAD fts`, BM25 rank or aggregate
 
-**FTS** means: split text into words, index them, then rank documents with **BM25** (a standard keyword-relevance score). It is not embeddings.
+**FTS** means: tokenize text, optionally stem (DuckDB default: Porter), index terms, then rank with **BM25**. It is **lexical** retrieval — not embeddings and not synonym/paraphrase resolution (`refund` ↛ `money back`).
 
 ## Why not SQL `LIKE`
 
-`LIKE '%refund%'` misses stemming and ranking. Use FTS for wording. Structured volume stays on `query_tickets`; **theme volume** uses `search_metrics` (lexical match count).
+`LIKE '%refund%'` misses stemming (e.g. `refunded`) and ranking. FTS helps with morphologically related wording. It does **not** find semantic paraphrases; that would need hybrid/embedding search (out of v1 on purpose).
+
+Structured volume stays on `query_tickets`; **lexical match volume** uses `search_metrics`.
 
 ## Routing
 
 | Need | Tool |
 | --- | --- |
-| Examples / “what are they saying?” | `search_tickets` |
-| “How many mention X?” / group by queue | `search_metrics` |
+| Keyword/topic examples | `search_tickets` |
+| “How many lexically match X?” / group by queue | `search_metrics` |
 | Counts on typed columns only | `query_tickets` |
 
-Report `search_metrics` as **FTS match volume**, not a human semantic class of all refund-related tickets.
+Report `search_metrics` as **FTS match volume**, not a human semantic class of all related tickets.
 
 ## Verify
 

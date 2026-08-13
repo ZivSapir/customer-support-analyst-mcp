@@ -10,10 +10,10 @@ The **host** (Cursor, Claude Code, or Codex) handles natural language. This proc
 | --- | --- |
 | `get_schema` | Columns, allowed filter values, SQL vs search routing |
 | `query_tickets` | Counts, group-bys, structured filters (read-only SQL) |
-| `search_tickets` | Customer wording examples (BM25); optional structured filters |
-| `search_metrics` | FTS match counts / group-bys for free-text themes |
+| `search_tickets` | Lexical keyword/topic examples (BM25); optional structured filters |
+| `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
 
-Structured counts come from `query_tickets`. Theme volumes come from `search_metrics` (lexical FTS matches). `search_tickets` hits are ranked examples, not volume.
+Structured counts come from `query_tickets`. Match volumes come from `search_metrics` (lexical FTS). `search_tickets` hits are ranked examples, not volume. FTS is not paraphrase/embedding search.
 
 Dataset: [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (downloaded once at ingest).
 
