@@ -87,7 +87,7 @@ Example file: [mcp.config.example.json](./mcp.config.example.json).
 
 Optional MCP prompt: `ticket-analyst` (schema first; SQL for structured counts; FTS examples + metrics for wording).
 
-Full list: [eval/questions.json](./eval/questions.json).
+Full list of example questions (routing hints for reviewers — **not** an automated LLM eval harness): [eval/questions.json](./eval/questions.json). `npm run verify` checks that file’s shape and pinned DuckDB/FTS expectations.
 
 ## Scripts
 
@@ -97,4 +97,4 @@ Full list: [eval/questions.json](./eval/questions.json).
 | `npm run peek` | Print columns + sample rows from local DuckDB |
 | `npm run build` | Compile `src/` → `dist/` |
 | `npm start` | Run the stdio server |
-| `npm run verify` | Smoke-test tools without a host |
+| `npm run verify` | Pinned smoke checks (row counts, filters, FTS, SQL guard/FS, eval JSON shape) |
