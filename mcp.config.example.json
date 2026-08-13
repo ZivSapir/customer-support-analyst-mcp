@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "customer-support-analyst": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/customer-support-analyst-mcp/dist/index.js"]
+    }
+  }
+}

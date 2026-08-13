@@ -1,0 +1,12 @@
+node_modules/
+dist/
+data/
+*.duckdb
+*.duckdb.wal
+.DS_Store
+.env
+.env.*
+
+# Local Cursor / working files (not part of the submission tree)
+.cursor/
+local/

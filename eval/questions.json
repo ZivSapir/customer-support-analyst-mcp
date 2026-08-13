@@ -1,0 +1,27 @@
+[
+  {
+    "question": "How many tickets are in the dataset?",
+    "expected_tool": "query_tickets",
+    "notes": "Exact COUNT. get_schema also includes row_count; SQL is the intended path."
+  },
+  {
+    "question": "How many high-priority tickets are there per queue?",
+    "expected_tool": "query_tickets",
+    "notes": "WHERE priority = 'high' GROUP BY queue. Use lowercase high."
+  },
+  {
+    "question": "Breakdown of tickets by language and priority",
+    "expected_tool": "query_tickets",
+    "notes": "GROUP BY language, priority."
+  },
+  {
+    "question": "What are customers saying about refunds?",
+    "expected_tool": "search_tickets",
+    "notes": "Themes. Do not treat resultCount as volume."
+  },
+  {
+    "question": "Find password-reset complaints in German tickets",
+    "expected_tool": "search_tickets",
+    "notes": "query plus language: de."
+  }
+]
