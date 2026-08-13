@@ -2,31 +2,40 @@
 
 Local [Model Context Protocol](https://modelcontextprotocol.io) server for natural-language Q&A over a customer-support ticket dataset. Built for analysts and ops — not a customer-facing chatbot.
 
-The **host** (Cursor, Claude Code, or Codex) handles natural language. This process exposes tools only. It does **not** call an LLM and needs **no API keys**.
+## Model
+
+This MCP server does **not** call an LLM itself. Natural-language planning is performed by the MCP **host**.
+
+**Tested with:**
+
+- Cursor Agent (host-configured model)
+
+No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The model is whatever the host already uses.
 
 ## How it works
 
 | Tool | Use for |
 | --- | --- |
-| `get_schema` | Columns, allowed filter values, SQL vs search routing |
+| `ping` | Health check / troubleshooting (MCP config smoke test) |
+| `get_schema` | Columns, semantic field descriptions, allowed filter values, SQL vs search routing |
 | `query_tickets` | Counts, group-bys, structured filters (read-only SQL) |
-| `search_tickets` | Lexical keyword/topic examples (BM25); optional structured filters |
+| `search_tickets` | Lexical keyword/topic examples (BM25); minimal hits + `relevance_score` (ranking only) |
 | `get_ticket` | One ticket by id (detail after search; text marked untrusted) |
 | `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
 
-Structured counts come from `query_tickets` (including `ticket_tags` for label analytics). Match volumes come from `search_metrics` (lexical FTS). `search_tickets` hits are ranked examples, not volume — use `get_ticket` for fuller detail. Ticket subject/body/answer are **untrusted model input**. FTS is not paraphrase/embedding search. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
+Structured counts come from `query_tickets` (including `ticket_tags` for label analytics). Match volumes come from `search_metrics` (lexical FTS only — **not** semantic topic prevalence). `search_tickets` hits are ranked examples, not volume — use `get_ticket` for body/answer. Ticket subject/body/answer are **untrusted model input**.
 
-Dataset: [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (downloaded once at ingest).
+FTS uses an inverted index, stemming, and BM25 ranking — better than SQL `LIKE` for examples, still **not** paraphrase/embedding search. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
 
-Architecture and rejected alternatives: [DECISIONS.md](./DECISIONS.md). Delivery milestones: [LAYERS.md](./LAYERS.md).
+**Dataset:** [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (Hugging Face Support_Dataset linked from the assignment; downloaded once at ingest).
+
+Architecture and rejected alternatives: [DECISIONS.md](./DECISIONS.md).
 
 ## Requirements
 
 - Node.js 20+
 - npm
 - An MCP host (Cursor, Claude Code, or Codex)
-
-No `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`. The model is whatever the host already uses.
 
 ## Quick start
 
@@ -61,7 +70,7 @@ User or project config (`.cursor/mcp.json` / `~/.cursor/mcp.json`):
 }
 ```
 
-You should see `get_schema`, `query_tickets`, `search_tickets`, `get_ticket`, and `search_metrics`.
+You should see `ping`, `get_schema`, `query_tickets`, `search_tickets`, `get_ticket`, and `search_metrics`. If `ping` fails, fix MCP configuration before debugging SQL.
 
 ### Claude Code
 
@@ -86,7 +95,7 @@ Example file: [mcp.config.example.json](./mcp.config.example.json).
 | High-priority tickets about password resets (examples) | `search_tickets` with filters |
 | How many tickets have the Refund tag? | `query_tickets` on `ticket_tags` |
 
-Optional MCP prompt: `ticket-analyst` (schema first; SQL for structured counts; FTS examples + metrics for wording).
+Optional MCP prompt: `ticket-analyst` (reminder only — routing lives in tool contracts + `get_schema`).
 
 Full list of example questions (routing hints for reviewers — **not** an automated LLM eval harness): [eval/questions.json](./eval/questions.json). `npm run verify` checks that file’s shape and pinned DuckDB/FTS expectations.
 
