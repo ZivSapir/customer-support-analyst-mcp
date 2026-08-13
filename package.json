@@ -16,8 +16,8 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@duckdb/node-api": "^1.5.5-r.4",
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "duckdb": "^1.4.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {

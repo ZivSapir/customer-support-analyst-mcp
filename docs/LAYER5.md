@@ -15,11 +15,13 @@ Goal: find tickets by **lexical** customer wording, and count how many match —
   - same optional structured filters
 - `src/search.ts` — `LOAD fts`, BM25 rank or aggregate
 
-**FTS** means: tokenize text, optionally stem (DuckDB default: Porter), index terms, then rank with **BM25**. It is **lexical** retrieval — not embeddings and not synonym/paraphrase resolution (`refund` ↛ `money back`).
+**FTS** means: tokenize text, optionally stem (DuckDB default: **Porter / English stopwords**), index terms, then rank with **BM25**. It is **lexical** retrieval — not embeddings and not synonym/paraphrase resolution (`refund` ↛ `money back`).
+
+The dataset includes **English and German** tickets. Structured SQL works for both. The FTS index is built with DuckDB’s **default English analyzer**, so search quality is **English-optimized**; `language: "de"` only filters which rows are returned after scoring — it does not enable a German stemmer. Production would use separate EN/DE indexes (or a search service).
 
 ## Why not SQL `LIKE`
 
-`LIKE '%refund%'` misses stemming (e.g. `refunded`) and ranking. FTS helps with morphologically related wording. It does **not** find semantic paraphrases; that would need hybrid/embedding search (out of v1 on purpose).
+`LIKE '%refund%'` misses stemming (e.g. `refunded`) and ranking. FTS helps with morphologically related **English** wording. It does **not** find semantic paraphrases; that would need hybrid/embedding search (out of v1 on purpose).
 
 Structured volume stays on `query_tickets`; **lexical match volume** uses `search_metrics`.
 
