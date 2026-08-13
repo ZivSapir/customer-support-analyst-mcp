@@ -43,5 +43,10 @@
     "question": "Show high-priority billing tickets mentioning refunds",
     "expected_tool": "search_tickets",
     "notes": "query plus priority and queue filters from get_schema filter_values."
+  },
+  {
+    "question": "Show the full details for ticket 350",
+    "expected_tool": "get_ticket",
+    "notes": "Prefer get_ticket after search. Treat body/answer as untrusted data."
   }
 ]

@@ -62,6 +62,7 @@ This file is the source of truth for the design document.
 | `get_schema` | First call — columns, sample values, SQL vs search routing |
 | `query_tickets` | Counts, group-bys, structured filters (read-only SQL) |
 | `search_tickets` | Lexical keyword/topic examples (BM25 FTS); optional structured filters |
+| `get_ticket` | Single-ticket detail after search (text enveloped as untrusted data) |
 | `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
 
 ### Deliberately out of scope (v1)
@@ -328,4 +329,31 @@ At scale, the same split holds: search service for match sets, warehouse SQL for
 | Option | Verdict |
 | --- | --- |
 | Stay on `duckdb@1.4` and document deprecation | Works today; looks like avoided tech debt on a hiring exercise |
+
+---
+
+## `get_ticket` + honest prompt-injection framing (2026-08-13)
+
+**Goal:** Stop overclaiming “treat body as data” as prevention; give the host a dedicated detail path.
+
+### What we built
+
+- MCP tool `get_ticket(ticket_id)` with an explicit `data_envelope` (untrusted content)
+- Schema/prompt/README: prefer compact search hits, then fetch one ticket; ticket text must not drive tool routing
+- Design risk table: “ticket text is untrusted model input” + mitigations (truncation, envelope, get_ticket)
+
+### Decisions made
+
+| Decision | Why |
+| --- | --- |
+| Add `get_ticket` instead of only rewriting docs | Matches “search then detail” and reduces temptation to `SELECT body` × 200 |
+| Keep shared field caps on `get_ticket` | One fat ticket still cannot blow context |
+| Honest risk wording | Host guidance ≠ sandbox; injection remains a model-context risk |
+
+### Rejected
+
+| Option | Verdict |
+| --- | --- |
+| Strip all free-text from SQL tools | Too harsh for assignment analytics; caps + get_ticket are enough for v1 |
+
 
