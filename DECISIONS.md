@@ -41,7 +41,7 @@ This file is the source of truth for the design document.
 | Exact aggregates ("how many?") | SQL engine built for analytics |
 | Local, no infra | Embedded — no server to install |
 | Ingest from Hugging Face CSV | `read_csv()` in one step |
-| Text themes | FTS extension (BM25 on subject/body) |
+| Text search (lexical) | FTS extension (BM25 on subject/body; not paraphrase/embedding search) |
 | Auditable answers | Query + result returned to client |
 
 **Alternatives considered:**
@@ -61,8 +61,8 @@ This file is the source of truth for the design document.
 | --- | --- |
 | `get_schema` | First call — columns, sample values, SQL vs search routing |
 | `query_tickets` | Counts, group-bys, structured filters (read-only SQL) |
-| `search_tickets` | Customer wording examples (BM25 FTS); optional structured filters |
-| `search_metrics` | Lexical FTS match counts / group-bys for free-text themes |
+| `search_tickets` | Lexical keyword/topic examples (BM25 FTS); optional structured filters |
+| `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
 
 ### Deliberately out of scope (v1)
 
@@ -204,7 +204,7 @@ A warehouse role that can only `SELECT` on allowlisted views is stronger than a 
 
 ## Milestone 5 — `search_tickets` (2026-08-12)
 
-**Goal:** Find tickets by customer wording and themes, without pretending search hits are counts.
+**Goal:** Find tickets by lexical customer wording, without pretending search hits are counts or that BM25 resolves paraphrases.
 
 ### What we built
 
@@ -216,23 +216,24 @@ A warehouse role that can only `SELECT` on allowlisted views is stronger than a 
 
 | Decision | Why |
 | --- | --- |
-| BM25 FTS, not embeddings | No API key; keyword/theme search is enough for this dataset; counts stay on SQL |
+| BM25 FTS, not embeddings | No API key; lexical keyword/topic search is enough for this dataset; counts stay on SQL |
 | Index subject + body only | That is customer wording. `answer` is the canned reply — searching it would mix in agent text |
 | Truncate body in the tool result | Keeps MCP payloads small; host can `query_tickets` by `ticket_id` for the full row |
 | Optional `language` filter | Dataset is EN/DE; filter in SQL after scoring |
 | Re-run ingest to build the index | FTS is not a live index; it is created at ingest time |
+| Honest “lexical / not paraphrase” wording | Porter stemming ≠ synonym resolution (`refund` ↛ `money back`) |
 
 ### Rejected
 
 | Option | Verdict |
 | --- | --- |
-| Vector DB / embeddings | Better semantic recall; adds a model, opaque scores, and cannot answer “how many?” |
-| SQL `LIKE '%refund%'` | Misses stemming/paraphrase; we already tell the host not to do this |
+| Vector DB / embeddings | Better semantic/paraphrase recall; adds a model, opaque scores — not required to sound “more AI” for v1 |
+| SQL `LIKE '%refund%'` | Misses stemming and ranking; we already tell the host not to do this |
 | Use search hit count as volume | Ranking ≠ census; schema notes already forbid this |
 
 ### Production note
 
-English Porter stemming is weaker on German tickets. A production CHEQ pipeline would use language-specific analyzers (or a warehouse search service) and still keep aggregates on SQL.
+English Porter stemming is weaker on German tickets. A production CHEQ pipeline would use language-specific analyzers (or a warehouse search service) and still keep aggregates on SQL. Add embeddings only if product needs synonym/paraphrase recall — hybrid with SQL, not instead of it.
 
 ---
 
