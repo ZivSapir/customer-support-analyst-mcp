@@ -17,6 +17,7 @@ import {
 import { getTicketSchema } from "./schema.js";
 import { searchMetrics, searchTickets } from "./search.js";
 import { validateReadOnlySql, wrapWithRowLimit } from "./sql-guard.js";
+import { getTicket } from "./ticket.js";
 
 /** Pinned aggregates for the Hugging Face revision used by `npm run ingest`. */
 const EXPECTED = {
@@ -227,6 +228,18 @@ async function main(): Promise<void> {
   console.log(
     `payload cap: returnedRowCount=${bulky.returnedRowCount} bytes=${Buffer.byteLength(bulkyJson, "utf8")} reasons=${bulky.truncationReasons.join(",")}`,
   );
+
+  const detail = await getTicket(1);
+  assert(detail.found, "get_ticket(1) should find a row");
+  assert(detail.ticket !== null, "get_ticket should return ticket payload");
+  assert(
+    detail.data_envelope.toLowerCase().includes("untrusted"),
+    "get_ticket should envelope ticket text as untrusted",
+  );
+  const missing = await getTicket(999_999_999);
+  assert(!missing.found, "get_ticket for missing id should set found=false");
+  console.log(`get_ticket: id=1 found=${detail.found}; missing found=${missing.found}`);
+
 
   const hits = await searchTickets({ query: "refund", k: 3 });
   assert(hits.length > 0, "search_tickets('refund') should return hits");
