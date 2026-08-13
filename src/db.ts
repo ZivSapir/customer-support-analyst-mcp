@@ -8,7 +8,10 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 
 export const DATA_DIR = path.join(REPO_ROOT, "data");
 export const DB_PATH = path.join(DATA_DIR, "tickets.duckdb");
+export const DB_TMP_PATH = path.join(DATA_DIR, "tickets.duckdb.tmp");
 export const CSV_PATH = path.join(DATA_DIR, "tickets.csv");
+export const CSV_TMP_PATH = path.join(DATA_DIR, "tickets.csv.tmp");
+export const INGEST_MANIFEST_PATH = path.join(DATA_DIR, "ingest-manifest.json");
 
 export type { DuckDBConnection, DuckDBInstance };
 
@@ -16,6 +19,8 @@ type CreateDatabaseOptions = {
   readOnly?: boolean;
   /** When false (default for read-only tools that run host SQL), block FS/network table functions. */
   enableExternalAccess?: boolean;
+  /** Override path (used for atomic ingest into a temp file). */
+  path?: string;
 };
 
 export async function assertDatabaseExists(): Promise<void> {
@@ -31,19 +36,21 @@ export async function assertDatabaseExists(): Promise<void> {
 export async function createDatabase(
   options: CreateDatabaseOptions = {},
 ): Promise<DuckDBInstance> {
+  const dbPath = options.path ?? DB_PATH;
+
   if (options.readOnly) {
     // READ_ONLY: do not mutate the .duckdb file.
     // enable_external_access=false: block read_csv/etc. against the host FS.
     // Search needs FTS LOAD, so that path opts back into external access.
     const enableExternalAccess = options.enableExternalAccess === true;
 
-    return DuckDBInstance.create(DB_PATH, {
+    return DuckDBInstance.create(dbPath, {
       access_mode: "READ_ONLY",
       enable_external_access: enableExternalAccess ? "true" : "false",
     });
   }
 
-  return DuckDBInstance.create(DB_PATH);
+  return DuckDBInstance.create(dbPath);
 }
 
 type ReadOnlyConnectionOptions = {

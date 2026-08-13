@@ -119,6 +119,7 @@ See [docs/LAYER1.md](./docs/LAYER1.md) for setup notes and Cursor configuration.
 - Added `src/db.ts` for shared DB helpers.
 - Added `src/ingest.ts` with script `npm run ingest`.
 - Ingest builds a `tickets` table in `data/tickets.duckdb` from the Hugging Face CSV.
+- Later hardened: pinned HF revision + CSV sha256, no `ignore_errors`, atomic DB replace, `data/ingest-manifest.json`
 
 ### Decisions made
 
@@ -128,6 +129,10 @@ See [docs/LAYER1.md](./docs/LAYER1.md) for setup notes and Cursor configuration.
 | Persist CSV under `data/` | Reproducible local runs; no repeated network download |
 | Normalize `priority`/`language` to lowercase during ingest | Easier and consistent SQL filtering later |
 | Include `ticket_id` via `row_number()` | Stable row reference for citations and debugging |
+| Pin HF revision + CSV sha256 | Floating `main` is not deterministic; checksum validates cache |
+| Fail without `ignore_errors` | Prefer noisy ingest failure over silent row loss |
+| Build `tickets.duckdb.tmp` then rename | Keep the previous DB until the new build succeeds |
+| Write `ingest-manifest.json` | Provenance for auditability (dataset, revision, hash, row_count, time) |
 
 ### What this unlocks
 

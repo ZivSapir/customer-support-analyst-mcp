@@ -39,7 +39,7 @@ npm run verify   # optional: schema, count, search, SQL guard
 npm start        # stdio MCP server — normally the host spawns this
 ```
 
-`data/` is gitignored. Each machine runs ingest locally.
+`data/` is gitignored. Each machine runs ingest locally against a **pinned** Hugging Face revision (see `src/dataset.ts`); the CSV checksum is verified and `data/ingest-manifest.json` records provenance.
 
 ## MCP configuration
 
@@ -93,7 +93,7 @@ Full list of example questions (routing hints for reviewers — **not** an autom
 
 | Script | Purpose |
 | --- | --- |
-| `npm run ingest` | CSV → `data/tickets.duckdb` + FTS index |
+| `npm run ingest` | Pinned CSV → `data/tickets.duckdb` + FTS + ingest manifest |
 | `npm run peek` | Print columns + sample rows from local DuckDB |
 | `npm run build` | Compile `src/` → `dist/` |
 | `npm start` | Run the stdio server |
