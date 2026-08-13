@@ -174,13 +174,14 @@ Milestone 3 can expose `get_schema` directly from local DuckDB, without any exte
 - MCP tool `query_tickets` (`sql` argument, Zod schema)
 - `src/sql-guard.ts` — single `SELECT`/`WITH` only; keyword denylist; comments/strings stripped before the check
 - `src/query.ts` — execute on a read-only connection; cap at 200 rows
+- Query connections set `enable_external_access=false` so table functions cannot read the host filesystem
 
 ### Decisions made
 
 | Decision | Why |
 | --- | --- |
 | Let the host write SQL | Matches analytics questions; numbers stay auditable |
-| Heuristic guard + DuckDB `OPEN_READONLY` | Fast reject of writes; second layer if the guard misses something |
+| Keyword guard + DB `READ_ONLY` + `enable_external_access=false` on host-SQL paths | Block writes and FS exfil via `read_csv` on `query_tickets`/`get_schema`. Search keeps external access only so FTS can `LOAD` |
 | Wrap every query in `LIMIT 200` | Protects stdio payload and the host context window |
 | Return JSON (`columns`, `rows`, `truncated`) | Host can cite the query result, not paraphrase a blob |
 | Add `zod` as a direct dependency | MCP SDK uses Zod for tool argument schemas |
@@ -191,11 +192,12 @@ Milestone 3 can expose `get_schema` directly from local DuckDB, without any exte
 | --- | --- |
 | Prisma / query builder API | Hides SQL; wrong for “show your work” analytics |
 | Full SQL parser | Correct for production; overkill for a local assignment |
+| Replace host SQL with a fixed aggregate RPC | Safer surface; abandons the auditable host-SQL design for this assignment |
 | Server-side LLM that writes SQL internally | Splits planning away from the host; extra API key |
 
 ### Production note
 
-A warehouse role that can only `SELECT` on a view is stronger than a keyword denylist. The guard is an assignment-sized stand-in for that.
+A warehouse role that can only `SELECT` on allowlisted views is stronger than a keyword denylist + DuckDB flags. For untrusted multi-tenant SQL, prefer a structured query API or a real parser — not host-generated SQL against an embedded engine.
 
 ---
 

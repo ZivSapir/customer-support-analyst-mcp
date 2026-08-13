@@ -14,12 +14,10 @@ Goal: answer count and filter questions with real SQL, not model guesses.
 1. Host writes SQL (after `get_schema`).
 2. Guard checks it is one read-only statement.
 3. We wrap it in `SELECT * FROM ( ... ) LIMIT 200`.
-4. DuckDB runs it on a **read-only** file connection.
+4. DuckDB runs it on a **read-only** file connection with **external filesystem access disabled**.
 5. JSON comes back: `columns`, `rowCount`, `truncated`, `rows`.
 
-Two safety layers: keyword guard (fast reject) and DuckDB `OPEN_READONLY` (even a sneaky write should fail).
-
-The guard is a heuristic, not a full SQL parser. Production would use warehouse roles / a real parser.
+Safety: keyword guard (reject writes) + `access_mode=READ_ONLY` + `enable_external_access=false` (blocks `read_csv` of host files). Not a full SQL sandbox. Production would use warehouse roles / allowlisted views / a real parser.
 
 ## Verify
 

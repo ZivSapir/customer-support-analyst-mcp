@@ -52,7 +52,8 @@ export async function searchTickets(
       ? ""
       : `AND language = '${escapeSqlString(input.language)}'`;
 
-  return withReadOnlyConnection(async (conn) => {
+  return withReadOnlyConnection(
+    async (conn) => {
     await run(conn, "LOAD fts;");
 
     const rows = await all<{
@@ -101,5 +102,7 @@ export async function searchTickets(
       queue: String(row.queue ?? ""),
       priority: String(row.priority ?? ""),
     }));
-  });
+    },
+    { enableExternalAccess: true },
+  );
 }
