@@ -15,7 +15,9 @@ Goal: answer count and filter questions with real SQL, not model guesses.
 2. Guard checks it is one read-only statement.
 3. We wrap it in `SELECT * FROM ( ... ) LIMIT 200`.
 4. DuckDB runs it on a **read-only** file connection with **external filesystem access disabled**.
-5. JSON comes back: `columns`, `rowCount`, `truncated`, `rows`.
+5. JSON comes back: `columns`, `returnedRowCount`, `truncated`, `rows`.
+
+`truncated` is true only when at least one extra row existed beyond the 200-row cap (fetch limit is 201, then slice). `returnedRowCount` is the payload size — not the full query cardinality.
 
 Safety: keyword guard (reject writes) + `access_mode=READ_ONLY` + `enable_external_access=false` (blocks `read_csv` of host files). Not a full SQL sandbox. Production would use warehouse roles / allowlisted views / a real parser.
 

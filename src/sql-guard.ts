@@ -101,5 +101,7 @@ export function validateReadOnlySql(rawSql: string): SqlGuardResult {
 }
 
 export function wrapWithRowLimit(sql: string, maxRows: number): string {
-  return `SELECT * FROM (\n${sql}\n) AS _query_tickets LIMIT ${maxRows}`;
+  // Fetch one extra row so executeReadOnlyQuery can set truncated accurately
+  // when the true result size is exactly maxRows.
+  return `SELECT * FROM (\n${sql}\n) AS _query_tickets LIMIT ${maxRows + 1}`;
 }

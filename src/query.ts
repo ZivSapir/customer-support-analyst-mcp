@@ -4,7 +4,8 @@ export const MAX_SQL_ROWS = 200;
 
 export type QueryTicketsResult = {
   columns: string[];
-  rowCount: number;
+  /** Number of rows returned in this payload (not the full query cardinality). */
+  returnedRowCount: number;
   truncated: boolean;
   rows: Record<string, unknown>[];
 };
@@ -23,7 +24,7 @@ export async function executeReadOnlyQuery(
 ): Promise<QueryTicketsResult> {
   return withReadOnlyConnection(async (conn) => {
     const rawRows = await all<Record<string, unknown>>(conn, sql);
-    const rows = rawRows.map((row) => {
+    const safeRows = rawRows.map((row) => {
       const safeRow: Record<string, unknown> = {};
 
       for (const [key, value] of Object.entries(row)) {
@@ -33,10 +34,14 @@ export async function executeReadOnlyQuery(
       return safeRow;
     });
 
+    // Caller wraps with LIMIT max+1 so we can tell "exactly max" from "more than max".
+    const truncated = safeRows.length > MAX_SQL_ROWS;
+    const rows = truncated ? safeRows.slice(0, MAX_SQL_ROWS) : safeRows;
+
     return {
       columns: rows[0] ? Object.keys(rows[0]) : [],
-      rowCount: rows.length,
-      truncated: rows.length >= MAX_SQL_ROWS,
+      returnedRowCount: rows.length,
+      truncated,
       rows,
     };
   });

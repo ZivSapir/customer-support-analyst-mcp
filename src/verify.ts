@@ -149,9 +149,35 @@ async function main(): Promise<void> {
   const capped = await executeReadOnlyQuery(
     wrapWithRowLimit(uncappedGuard.sql, MAX_SQL_ROWS),
   );
-  assert(capped.rowCount === MAX_SQL_ROWS, `row cap should be ${MAX_SQL_ROWS}`);
+  assert(
+    capped.returnedRowCount === MAX_SQL_ROWS,
+    `row cap should return ${MAX_SQL_ROWS} rows`,
+  );
   assert(capped.truncated, "wide SELECT should set truncated=true");
-  console.log(`row cap: ${capped.rowCount} truncated=${capped.truncated}`);
+  console.log(
+    `row cap: returnedRowCount=${capped.returnedRowCount} truncated=${capped.truncated}`,
+  );
+
+  const exactGuard = validateReadOnlySql(
+    `SELECT ticket_id FROM tickets LIMIT ${MAX_SQL_ROWS}`,
+  );
+  if (!exactGuard.ok) {
+    throw new Error(exactGuard.error);
+  }
+  const exact = await executeReadOnlyQuery(
+    wrapWithRowLimit(exactGuard.sql, MAX_SQL_ROWS),
+  );
+  assert(
+    exact.returnedRowCount === MAX_SQL_ROWS,
+    `exact-${MAX_SQL_ROWS} query should return ${MAX_SQL_ROWS} rows`,
+  );
+  assert(
+    !exact.truncated,
+    `result of exactly ${MAX_SQL_ROWS} rows must not set truncated=true`,
+  );
+  console.log(
+    `exact ${MAX_SQL_ROWS}: returnedRowCount=${exact.returnedRowCount} truncated=${exact.truncated}`,
+  );
 
   const hits = await searchTickets({ query: "refund", k: 3 });
   assert(hits.length > 0, "search_tickets('refund') should return hits");
