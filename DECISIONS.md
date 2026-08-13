@@ -287,12 +287,15 @@ At scale, the same split holds: search service for match sets, warehouse SQL for
 | No server-side model / API key | Host LLM already plans tool calls; keeps the server auditable and local |
 | Prompt is optional | Tools already describe routing; the prompt is a reminder, not a second brain |
 | `verify` does not start MCP | Reviewers can check data + guards without Cursor |
+| Pinned expected row counts / aggregates in `verify` | Catches silent partial ingest (`ignore_errors=true`); stronger than COUNT===schema only |
+| `eval/questions.json` is example routing, not an LLM harness | Avoids pretending we run automated model evals without an API key |
 
 ### Rejected
 
 | Option | Verdict |
 | --- | --- |
 | Automated LLM eval harness | Needs an API key and a host; out of v1 scope |
+| Full MCP stdio protocol smoke in `verify` | Nice later; function-level checks cover DuckDB/tool logic for clone-and-run |
 | New column indexes | 28k rows; DuckDB scans are enough. FTS index already exists from Milestone 5 |
 
 ---

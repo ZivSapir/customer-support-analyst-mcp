@@ -6,8 +6,8 @@ Goal: a reviewer can clone, ingest, connect, and ask questions from the README a
 
 - README: clone-and-run, MCP config (Cursor / Claude Code / Codex), example questions, no API keys
 - MCP **prompt** `ticket-analyst` — a reusable instruction for the host (not a database tool)
-- `eval/questions.json` — sample questions and which tool should answer them
-- `npm run verify` — schema, COUNT, search, and SQL-guard smoke test without Cursor
+- `eval/questions.json` — **example** questions + expected tool routing (not a live LLM harness)
+- `npm run verify` — pinned dataset checks (exact row counts, aggregates, FTS, filters, SQL guard / external FS, eval JSON shape)
 
 No new database indexes in this milestone.
 
@@ -27,3 +27,5 @@ npm run verify
 ```
 
 Expected last line: `verify ok`.
+
+`verify` fails if ingest silently lost rows (`ignore_errors=true` at ingest) because it asserts the pinned total **28587**, not merely “COUNT equals itself.”
