@@ -1,14 +1,21 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  EXPECTED_CSV_SHA256,
+  EXPECTED_ROW_COUNT,
+  SOURCE_DATASET,
+  SOURCE_REVISION,
+} from "./dataset.js";
+import { INGEST_MANIFEST_PATH } from "./db.js";
 import { executeReadOnlyQuery, MAX_SQL_ROWS } from "./query.js";
 import { getTicketSchema } from "./schema.js";
 import { searchMetrics, searchTickets } from "./search.js";
 import { validateReadOnlySql, wrapWithRowLimit } from "./sql-guard.js";
 
-/** Pinned to the Hugging Face CSV used by `npm run ingest` (ignore_errors=true). */
+/** Pinned aggregates for the Hugging Face revision used by `npm run ingest`. */
 const EXPECTED = {
-  rowCount: 28587,
+  rowCount: EXPECTED_ROW_COUNT,
   highPriority: 11178,
   languageDe: 12249,
   languageEn: 16338,
@@ -194,6 +201,33 @@ async function main(): Promise<void> {
   );
 
   await assertEvalQuestionsFile();
+
+  const manifestRaw = await readFile(INGEST_MANIFEST_PATH, "utf8");
+  const manifest = JSON.parse(manifestRaw) as {
+    source_dataset?: string;
+    source_revision?: string;
+    csv_sha256?: string;
+    row_count?: number;
+  };
+  assert(
+    manifest.source_dataset === SOURCE_DATASET,
+    "ingest-manifest source_dataset mismatch",
+  );
+  assert(
+    manifest.source_revision === SOURCE_REVISION,
+    "ingest-manifest source_revision mismatch",
+  );
+  assert(
+    manifest.csv_sha256 === EXPECTED_CSV_SHA256,
+    "ingest-manifest csv_sha256 mismatch",
+  );
+  assert(
+    manifest.row_count === EXPECTED.rowCount,
+    "ingest-manifest row_count mismatch",
+  );
+  console.log(
+    `ingest-manifest: ${manifest.source_dataset}@${String(manifest.source_revision).slice(0, 12)}… rows=${manifest.row_count}`,
+  );
 
   console.log("verify ok");
 }

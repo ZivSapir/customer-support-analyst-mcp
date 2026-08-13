@@ -1,15 +1,55 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
-import { all, connect, createDatabase, CSV_PATH, DATA_DIR, DB_PATH, run } from "./db.js";
+import {
+  DATASET_URL,
+  EXPECTED_CSV_SHA256,
+  EXPECTED_ROW_COUNT,
+  SOURCE_DATASET,
+  SOURCE_FILENAME,
+  SOURCE_REVISION,
+} from "./dataset.js";
+import {
+  all,
+  connect,
+  createDatabase,
+  CSV_PATH,
+  CSV_TMP_PATH,
+  DATA_DIR,
+  DB_PATH,
+  DB_TMP_PATH,
+  INGEST_MANIFEST_PATH,
+  run,
+} from "./db.js";
 
-const DATASET_URL =
-  "https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets/resolve/main/aa_dataset-tickets-multi-lang-5-2-50-version.csv";
+export type IngestManifest = {
+  source_dataset: string;
+  source_revision: string;
+  source_filename: string;
+  source_url: string;
+  csv_sha256: string;
+  row_count: number;
+  ingested_at: string;
+};
 
 async function ensureDataDir(): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });
 }
 
-async function downloadCsv(): Promise<void> {
-  console.log("Downloading dataset CSV from Hugging Face...");
+async function sha256File(filePath: string): Promise<string> {
+  const buffer = await fs.readFile(filePath);
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+async function removeIfExists(filePath: string): Promise<void> {
+  try {
+    await fs.unlink(filePath);
+  } catch {
+    // Missing is fine.
+  }
+}
+
+async function downloadCsvToTemp(): Promise<void> {
+  console.log(`Downloading pinned dataset (${SOURCE_REVISION.slice(0, 12)}…)…`);
   const response = await fetch(DATASET_URL);
 
   if (!response.ok) {
@@ -19,23 +59,65 @@ async function downloadCsv(): Promise<void> {
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(CSV_PATH, buffer);
-  console.log(`Saved CSV at ${CSV_PATH}`);
-}
+  await removeIfExists(CSV_TMP_PATH);
+  await fs.writeFile(CSV_TMP_PATH, buffer);
 
-async function rebuildDatabase(): Promise<void> {
-  try {
-    await fs.unlink(DB_PATH);
-  } catch {
-    // No existing database file yet.
+  const digest = createHash("sha256").update(buffer).digest("hex");
+  if (digest !== EXPECTED_CSV_SHA256) {
+    await removeIfExists(CSV_TMP_PATH);
+    throw new Error(
+      `Downloaded CSV sha256 mismatch.\nExpected: ${EXPECTED_CSV_SHA256}\nActual:   ${digest}`,
+    );
   }
 
-  const db = await createDatabase();
+  await fs.rename(CSV_TMP_PATH, CSV_PATH);
+  console.log(`Saved CSV at ${CSV_PATH} (sha256 ${digest.slice(0, 12)}…)`);
+}
+
+async function ensurePinnedCsv(): Promise<string> {
+  const csvExists = await fs
+    .access(CSV_PATH)
+    .then(() => true)
+    .catch(() => false);
+
+  if (csvExists) {
+    const digest = await sha256File(CSV_PATH);
+    if (digest === EXPECTED_CSV_SHA256) {
+      console.log(`Using existing CSV at ${CSV_PATH} (checksum OK)`);
+      return digest;
+    }
+
+    console.warn(
+      `Existing CSV checksum mismatch (got ${digest.slice(0, 12)}…). Re-downloading.`,
+    );
+  }
+
+  await downloadCsvToTemp();
+  return EXPECTED_CSV_SHA256;
+}
+
+async function writeManifest(manifest: IngestManifest): Promise<void> {
+  await fs.writeFile(
+    INGEST_MANIFEST_PATH,
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    "utf8",
+  );
+  console.log(`Wrote ingest manifest at ${INGEST_MANIFEST_PATH}`);
+}
+
+async function rebuildDatabase(csvSha256: string): Promise<number> {
+  await removeIfExists(DB_TMP_PATH);
+  await removeIfExists(`${DB_TMP_PATH}.wal`);
+
+  const db = await createDatabase({ path: DB_TMP_PATH });
   const conn = await connect(db);
+
+  let rowCount = 0;
 
   try {
     const escapedCsvPath = CSV_PATH.replace(/'/g, "''");
 
+    // Fail loudly on malformed rows (no ignore_errors).
     await run(
       conn,
       `
@@ -61,8 +143,7 @@ async function rebuildDatabase(): Promise<void> {
       FROM read_csv(
         '${escapedCsvPath}',
         header = true,
-        auto_detect = true,
-        ignore_errors = true
+        auto_detect = true
       );
       `,
     );
@@ -79,28 +160,40 @@ async function rebuildDatabase(): Promise<void> {
       conn,
       "SELECT COUNT(*)::INTEGER AS total FROM tickets;",
     );
-    console.log(`Created DuckDB at ${DB_PATH} with ${stats[0]?.total ?? 0} rows`);
+    rowCount = Number(stats[0]?.total ?? 0);
+
+    if (rowCount !== EXPECTED_ROW_COUNT) {
+      throw new Error(
+        `Ingest row_count ${rowCount} !== expected ${EXPECTED_ROW_COUNT}. Refusing to replace the database.`,
+      );
+    }
   } finally {
     conn.closeSync();
     db.closeSync();
   }
+
+  // Atomic swap: previous tickets.duckdb remains until this rename succeeds.
+  await fs.rename(DB_TMP_PATH, DB_PATH);
+  await removeIfExists(`${DB_TMP_PATH}.wal`);
+
+  await writeManifest({
+    source_dataset: SOURCE_DATASET,
+    source_revision: SOURCE_REVISION,
+    source_filename: SOURCE_FILENAME,
+    source_url: DATASET_URL,
+    csv_sha256: csvSha256,
+    row_count: rowCount,
+    ingested_at: new Date().toISOString(),
+  });
+
+  console.log(`Created DuckDB at ${DB_PATH} with ${rowCount} rows`);
+  return rowCount;
 }
 
 async function main(): Promise<void> {
   await ensureDataDir();
-
-  const csvExists = await fs
-    .access(CSV_PATH)
-    .then(() => true)
-    .catch(() => false);
-
-  if (!csvExists) {
-    await downloadCsv();
-  } else {
-    console.log(`Using existing CSV at ${CSV_PATH}`);
-  }
-
-  await rebuildDatabase();
+  const csvSha256 = await ensurePinnedCsv();
+  await rebuildDatabase(csvSha256);
 }
 
 main().catch((error: unknown) => {
