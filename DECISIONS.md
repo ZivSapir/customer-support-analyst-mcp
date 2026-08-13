@@ -1,360 +1,67 @@
 # Decision log — Customer Support Analyst MCP
 
-We record **what we chose, why, and what we rejected** at each delivery milestone.
-This file is the source of truth for the design document.
+Architecture and rejected alternatives for the submission. Prefer this file over repeating the same rationale in README.
 
----
+## Product
 
-## Milestone 0 — Product & architecture (2026-08-12)
+**Who:** Support analysts / ops (not customers).  
+**What:** Natural-language Q&A over a local ticket dataset — exact counts + lexical examples.  
+**Not:** Customer chatbot, ticket writer, or auto-router.
 
-### Purpose
+## MCP shape
 
-**Who:** Support analysts, ops leads, internal stakeholders (not customers).
-
-**What:** Natural-language Q&A **over** the support ticket dataset — accurate counts and ticket themes.
-
-**Not:** A customer chatbot, ticket writer, or auto-router.
-
-### MCP shape
-
-- **Transport:** stdio (local process; Cursor / Claude Code / Codex connect via config)
-- **NL layer:** MCP client LLM (Cursor/Claude) — plans which tool to call
-- **Data layer:** Our server — tools only, **no server-side LLM**
-- **Principle:** Numbers come from SQL execution, not model memory
-
-### Language
-
-**Chosen:** TypeScript
-
-**Why:** Official MCP SDK is mature; TypeScript fits a local stdio server and the assignment’s stack flexibility.
-
-**Production note:** CHEQ Data & AI likely ships Python services against Snowflake — same tool contract, different runtime.
-
-### Data store
-
-**Chosen:** DuckDB via `@duckdb/node-api` (local single file, e.g. `data/tickets.duckdb`)
-
-**Why:**
-
-| Need | DuckDB fit |
+| Choice | Why |
 | --- | --- |
-| Exact aggregates ("how many?") | SQL engine built for analytics |
-| Local, no infra | Embedded — no server to install |
-| Ingest from Hugging Face CSV | `read_csv()` in one step |
-| Text search (lexical) | FTS extension (BM25 on subject/body; not paraphrase/embedding search) |
-| Auditable answers | Query + result returned to client |
+| stdio MCP server | Clone-and-run; host (Cursor / Claude Code / Codex) plans tool calls |
+| No server-side LLM / API keys | Numbers stay auditable; host already has a model |
+| TypeScript + official MCP SDK | Mature SDK; fits local stdio |
+| Read-only tools only | Analyst read path; no writes / web UI / agent frameworks |
 
-**Alternatives considered:**
+**Production:** Use CHEQ’s standard service/runtime stack; preserve the MCP tool contract (different store/runtime, same tools).
 
-| Option | Verdict |
+## Data store
+
+**Chosen:** DuckDB via `@duckdb/node-api` (local `data/tickets.duckdb`).
+
+| Need | Fit |
 | --- | --- |
-| **SQLite** | Viable embedded SQL; weaker analytics ergonomics; we'd still add FTS separately |
-| **PostgreSQL** | Real prod pattern; requires running server — overkill for local home assignment |
-| **Snowflake** | Correct CHEQ prod target; wrong for "run locally" spec |
-| **CSV / JSON in memory** | No real SQL; aggregates get hacky; doesn't scale to 60k+ rows cleanly |
-| **Vector DB only (RAG)** | Good for semantic search; **cannot** answer "how many?" reliably |
-| **Embeddings + DuckDB** | Possible v2; adds API key + opaque scores — deferred |
+| Exact aggregates | Analytics SQL |
+| Local, no infra | Embedded file |
+| Lexical text search | FTS extension (BM25) |
+| Auditable answers | Query + result to host |
 
-### Tool split (v1)
+**Rejected:** SQLite (weaker analytics ergonomics); Postgres/Snowflake for v1 (wrong for local); vector-DB-only (cannot answer “how many?”); embeddings in v1 (API key + opaque scores).
 
-| Tool | Use when |
+**Ingest:** Separate `npm run ingest` — pinned HF revision, CSV sha256, atomic DB replace, `ingest-manifest.json`. Tables: `tickets` + normalized `ticket_tags(ticket_id, tag)`.
+
+**Dataset:** [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (assignment Support_Dataset link).
+
+## Tool contract
+
+| Tool | Contract |
 | --- | --- |
-| `get_schema` | First call — columns, sample values, SQL vs search routing |
-| `query_tickets` | Counts, group-bys, structured filters (read-only SQL) |
-| `search_tickets` | Lexical keyword/topic examples (BM25 FTS); optional structured filters |
-| `get_ticket` | Single-ticket detail after search (text enveloped as untrusted data) |
-| `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
+| `ping` | Health / troubleshooting only |
+| `get_schema` | Columns + semantic field descriptions + filter/tag values + routing |
+| `query_tickets` | Host SQL for structured counts/filters; caps + heuristic guard; DB read-only + external access off |
+| `search_tickets` | Minimal ranked lexical examples (`relevance_score` = ranking only); not volume |
+| `search_metrics` | Lexical FTS match volume / group-by — **not** semantic topic prevalence |
+| `get_ticket` | One-ticket detail; `data_envelope` marks text as untrusted |
 
-### Deliberately out of scope (v1)
+Correctness comes from **tool contracts**, not prompt obedience. The optional `ticket-analyst` prompt reinforces routing; it is not the security or metrics boundary.
 
-- Server-side LLM calls
-- Embeddings / RAG-only pipeline
-- Write / update tools
-- Web UI
-- Agent frameworks (LangChain, etc.)
+**FTS vs LIKE:** BM25 uses an inverted index, stemming, and ranking. `LIKE '%x%'` is substring-only. FTS is still **lexical** — not paraphrase/embedding search (`refund` ↛ `money back`). Dataset is EN+DE; SQL works for both; FTS analyzer is English-default (DE best-effort).
 
-### Dataset
+**Security (v1 honesty):** Keyword guard is a convenience filter, not a sandbox. Host-SQL paths use `READ_ONLY` + `enable_external_access=false` (after startup `LOAD fts`). Risk remains: over-broad SQL, resource exhaustion, and ticket text as prompt-injection into the host model. Production: SELECT-only identity, governed views, query budgets/timeouts; prefer a typed analytics API over free SQL from the model.
 
-[Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) — synthetic EN/DE tickets, structured + free-text fields.
+## Runtime details
 
----
+- Shared read-only DuckDB connection for the MCP process lifetime (`LOAD fts` once, then disable external access).
+- Search values bound via prepared parameters (no hand-escaped FTS query strings).
+- Tool annotations: `readOnlyHint`, `destructiveHint: false`, `openWorldHint: false`.
+- Results still JSON-in-text (`structuredContent` deferred).
 
-## Milestone 1 — Minimal MCP server (2026-08-12)
+## Deliberately deferred
 
-**Goal:** Prove stdio MCP works before adding DuckDB.
-
-### What we built
-
-- `@modelcontextprotocol/sdk` — handles MCP handshake, JSON-RPC, tool listing (we don't implement protocol by hand)
-- `src/index.ts` — one tool: `ping` → returns `"pong"`
-- `StdioServerTransport` — Cursor spawns `node dist/index.js`, talks over stdin/stdout
-
-### Why start with connectivity
-
-Separates **plumbing** (host ↔ stdio handshake) from **data** (ingest and query tools). If `ping` fails, configuration is fixed before debugging SQL.
-
-### Dependencies (Milestone 1 only)
-
-| Package | Why now |
-| --- | --- |
-| `@modelcontextprotocol/sdk` | MCP server |
-| `typescript`, `tsx` | Build and dev run |
-
-DuckDB deferred to Milestone 2.
-
-### Logging rule
-
-Errors → `console.error` (stderr). Never `console.log` to stdout — stdout is the MCP wire.
-
-See [docs/LAYER1.md](./docs/LAYER1.md) for setup notes and Cursor configuration.
-
----
-
-## Milestone 2 — Ingest to local DuckDB (2026-08-12)
-
-**Goal:** Prepare a local dataset copy once, so tool calls are fast and deterministic.
-
-### What we built
-
-- Added `@duckdb/node-api` (DuckDB Node Neo) dependency.
-- Added `src/db.ts` for shared DB helpers.
-- Added `src/ingest.ts` with script `npm run ingest`.
-- Ingest builds a `tickets` table in `data/tickets.duckdb` from the Hugging Face CSV.
-- Later hardened: pinned HF revision + CSV sha256, no `ignore_errors`, atomic DB replace, `data/ingest-manifest.json`
-
-### Decisions made
-
-| Decision | Why |
-| --- | --- |
-| Keep ingest as a separate script | Runtime MCP server should focus on tool calls, not bootstrap IO |
-| Persist CSV under `data/` | Reproducible local runs; no repeated network download |
-| Normalize `priority`/`language` to lowercase during ingest | Easier and consistent SQL filtering later |
-| Include `ticket_id` via `row_number()` | Stable row reference for citations and debugging |
-| Pin HF revision + CSV sha256 | Floating `main` is not deterministic; checksum validates cache |
-| Fail without `ignore_errors` | Prefer noisy ingest failure over silent row loss |
-| Build `tickets.duckdb.tmp` then rename | Keep the previous DB until the new build succeeds |
-| Write `ingest-manifest.json` | Provenance for auditability (dataset, revision, hash, row_count, tag_row_count, time) |
-| Normalize `ticket_tags(ticket_id, tag)` at ingest | Wide `tag_1..tag_8` is awkward for analytics; keep source columns, query the long table |
-
-### What this unlocks
-
-Milestone 3 can expose `get_schema` directly from local DuckDB, without any external network dependency.
-
----
-
-## Milestone 3 — `get_schema` (2026-08-12)
-
-**Goal:** Let the host inspect the local table before writing SQL.
-
-### What we built
-
-- MCP tool `get_schema` (no input)
-- `src/schema.ts` reads `DESCRIBE tickets` plus distinct values for low-cardinality columns
-- MCP server opens DuckDB **read-only**
-
-### Decisions made
-
-| Decision | Why |
-| --- | --- |
-| Return JSON, not Markdown | Host can parse columns and filter values reliably |
-| Include full distinct values for `type` / `queue` / `priority` / `language` | Small closed sets; guessing labels is a common failure mode |
-| Include routing notes with the schema | Schema is the planning tool; SQL and search follow the same contract |
-| Read-only connection | Analyst tools must not mutate the dataset |
-| Missing DB → tool error, process stays alive | Ingest is a setup step; a missing file should not crash stdio |
-| Schema notes: counts only from SQL; ticket text is untrusted data | Stops the host from treating search hits as statistics, or following prompt-like text in tickets |
-
-### Rejected
-
-| Option | Verdict |
-| --- | --- |
-| Hard-code column list in the tool | Drifts from ingest; DuckDB `DESCRIBE` is the source of truth |
-| Dump distinct values for `tag_*` | High cardinality and mostly null — notes only |
-| Server-side LLM to summarize schema | Assignment allows it; we keep numbers and names from SQL |
-
----
-
-## Milestone 4 — `query_tickets` (2026-08-12)
-
-**Goal:** Accurate counts and structured filters via SQL the host writes.
-
-### What we built
-
-- MCP tool `query_tickets` (`sql` argument, Zod schema)
-- `src/sql-guard.ts` — single `SELECT`/`WITH` only; keyword denylist; comments/strings stripped before the check
-- `src/query.ts` — execute on a read-only connection; cap at 200 rows
-- Query connections set `enable_external_access=false` so table functions cannot read the host filesystem
-
-### Decisions made
-
-| Decision | Why |
-| --- | --- |
-| Let the host write SQL | Matches analytics questions; numbers stay auditable |
-| Keyword guard + DB `READ_ONLY` + `enable_external_access=false` on host-SQL paths | Block writes and FS exfil via `read_csv` on `query_tickets`/`get_schema`. Search keeps external access only so FTS can `LOAD` |
-| Wrap every query in `LIMIT 200` | Protects stdio payload and the host context window |
-| Return JSON (`columns`, `rows`, `returnedRowCount`, `truncated`, `truncationReasons`) | Host can cite results; row cap uses limit+1; string/payload caps bound LLM context |
-| Add `zod` as a direct dependency | MCP SDK uses Zod for tool argument schemas |
-
-### Rejected
-
-| Option | Verdict |
-| --- | --- |
-| Prisma / query builder API | Hides SQL; wrong for “show your work” analytics |
-| Full SQL parser | Correct for production; overkill for a local assignment |
-| Replace host SQL with a fixed aggregate RPC | Safer surface; abandons the auditable host-SQL design for this assignment |
-| Server-side LLM that writes SQL internally | Splits planning away from the host; extra API key |
-
-### Production note
-
-A warehouse role that can only `SELECT` on allowlisted views is stronger than a keyword denylist + DuckDB flags. For untrusted multi-tenant SQL, prefer a structured query API or a real parser — not host-generated SQL against an embedded engine.
-
----
-
-## Milestone 5 — `search_tickets` (2026-08-12)
-
-**Goal:** Find tickets by lexical customer wording, without pretending search hits are counts or that BM25 resolves paraphrases.
-
-### What we built
-
-- Ingest installs DuckDB `fts` and builds a BM25 index on `subject` + `body`
-- MCP tool `search_tickets` (`query`, optional `k`, optional `language`)
-- Returns ranked hits with `ticket_id`, score, and a short body preview
-
-### Decisions made
-
-| Decision | Why |
-| --- | --- |
-| BM25 FTS, not embeddings | No API key; lexical keyword/topic search is enough for this dataset; counts stay on SQL |
-| Index subject + body only | That is customer wording. `answer` is the canned reply — searching it would mix in agent text |
-| Truncate body in the tool result | Keeps MCP payloads small; host can `query_tickets` by `ticket_id` for the full row |
-| Optional `language` filter | Dataset is EN/DE; filters rows **after** scoring — does not switch the FTS analyzer |
-| Honest “lexical / not paraphrase” wording | Porter stemming ≠ synonym resolution (`refund` ↛ `money back`) |
-| Single default FTS index (English analyzer) | v1 simplicity; document that German FTS is weaker rather than fake locale support |
-
-### Rejected
-
-| Option | Verdict |
-| --- | --- |
-| Vector DB / embeddings | Better semantic/paraphrase recall; adds a model, opaque scores — not required to sound “more AI” for v1 |
-| SQL `LIKE '%refund%'` | Misses stemming and ranking; we already tell the host not to do this |
-| Use search hit count as volume | Ranking ≠ census; schema notes already forbid this |
-| Dual EN/DE FTS indexes in v1 | Correct for German morphology; deferred — honest docs preferred for assignment scope |
-
-### Production note
-
-The default `create_fts_index` uses an **English-centric analyzer** (Porter stemmer, English stopwords). That is stronger than “Porter is a bit weak on German”: German tickets remain in the table and SQL filters work, but lexical search quality for DE is best-effort. Production would build **per-language indexes** (e.g. German stemmer/stopwords) or use a locale-aware search service, and still keep aggregates on SQL. Add embeddings only if product needs synonym/paraphrase recall — hybrid with SQL, not instead of it.
-
----
-
-## Milestone 5b — FTS filters + `search_metrics` (2026-08-13)
-
-**Goal:** Close the SQL↔FTS hole for questions that need both free-text matching and real volumes (or filtered examples).
-
-### What we built
-
-- Extended `search_tickets` with optional `priority` / `queue` / `type` (plus existing `language`)
-- New tool `search_metrics(query, filters?, group_by?)` — same BM25 match predicate, `COUNT(*)` / `GROUP BY`
-
-### Decisions made
-
-| Decision | Why |
-| --- | --- |
-| Dedicated `search_metrics` (not reusing top-k `resultCount`) | Keeps examples vs census semantics explicit |
-| Honest “lexical FTS match” wording in the tool result | Avoids pretending BM25 ≡ human theme labeling |
-| Allowlisted `group_by` columns only | Same structured fields as filters; no free-text GROUP BY |
-| Keep `query_tickets` for structured-only aggregates | Clear routing: typed columns → SQL; theme volume → FTS metrics |
-
-### Rejected
-
-| Option | Verdict |
-| --- | --- |
-| Tell the host to `LIKE` themes in `query_tickets` | Weaker matcher; defeats the FTS index |
-| Inflate `search_tickets` k and treat hits as volume | Still a sample, easy to misuse |
-| Embeddings / classifier labels for “refund” | Out of v1 (no server model); different product |
-
-### Production note
-
-At scale, the same split holds: search service for match sets, warehouse SQL for governed aggregates — or a single metrics API that joins both under an audited query plan.
-
----
-
-## Milestone 6 — README, prompt, eval (2026-08-12)
-
-**Goal:** Clone-and-run documentation and a host-side workflow hint.
-
-### What we built
-
-- README that matches the assignment (run, connect, no secrets)
-- MCP prompt `ticket-analyst`
-- `eval/questions.json` and `npm run verify`
-
-### Decisions made
-
-| Decision | Why |
-| --- | --- |
-| No server-side model / API key | Host LLM already plans tool calls; keeps the server auditable and local |
-| Prompt is optional | Tools already describe routing; the prompt is a reminder, not a second brain |
-| `verify` does not start MCP | Reviewers can check data + guards without Cursor |
-| Pinned expected row counts / aggregates in `verify` | Catches silent partial ingest (`ignore_errors=true`); stronger than COUNT===schema only |
-| `eval/questions.json` is example routing, not an LLM harness | Avoids pretending we run automated model evals without an API key |
-
-### Rejected
-
-| Option | Verdict |
-| --- | --- |
-| Automated LLM eval harness | Needs an API key and a host; out of v1 scope |
-| Full MCP stdio protocol smoke in `verify` | Nice later; function-level checks cover DuckDB/tool logic for clone-and-run |
-| New column indexes | 28k rows; DuckDB scans are enough. FTS index already exists from Milestone 5 |
-
----
-
-## Client migration — `@duckdb/node-api` (2026-08-13)
-
-**Goal:** Leave the deprecated Node `duckdb` package before DuckDB 1.5 drops it.
-
-### What we changed
-
-- Dependency: `duckdb` → `@duckdb/node-api` (Node Neo)
-- `src/db.ts`: `DuckDBInstance` / `DuckDBConnection`, native async `run` / `runAndReadAll` (no callback wrappers)
-- Ingest close path uses `closeSync()`
-
-### Decisions made
-
-| Decision | Why |
-| --- | --- |
-| Migrate now for the assignment | Deprecated client is a concrete 2026 review signal; Neo is the supported path |
-| Keep the same helper surface (`run` / `all` / `withReadOnlyConnection`) | Call sites stay small; only the driver changes |
-| Prefer `getRowObjectsJson()` for query rows | JSON-friendly values for MCP tool responses |
-
-### Rejected
-
-| Option | Verdict |
-| --- | --- |
-| Stay on `duckdb@1.4` and document deprecation | Works today; looks like avoided tech debt on a hiring exercise |
-
----
-
-## `get_ticket` + honest prompt-injection framing (2026-08-13)
-
-**Goal:** Stop overclaiming “treat body as data” as prevention; give the host a dedicated detail path.
-
-### What we built
-
-- MCP tool `get_ticket(ticket_id)` with an explicit `data_envelope` (untrusted content)
-- Schema/prompt/README: prefer compact search hits, then fetch one ticket; ticket text must not drive tool routing
-- Design risk table: “ticket text is untrusted model input” + mitigations (truncation, envelope, get_ticket)
-
-### Decisions made
-
-| Decision | Why |
-| --- | --- |
-| Add `get_ticket` instead of only rewriting docs | Matches “search then detail” and reduces temptation to `SELECT body` × 200 |
-| Keep shared field caps on `get_ticket` | One fat ticket still cannot blow context |
-| Honest risk wording | Host guidance ≠ sandbox; injection remains a model-context risk |
-
-### Rejected
-
-| Option | Verdict |
-| --- | --- |
-| Strip all free-text from SQL tools | Too harsh for assignment analytics; caps + get_ticket are enough for v1 |
-
-
+- Typed `analyze_tickets` (parameterized aggregates, no host SQL) — stronger contract; keep `query_tickets` for this assignment’s auditable-SQL story; production direction.
+- Dual EN/DE FTS indexes; embeddings / hybrid search.
+- Full MCP `outputSchema` / `structuredContent`.

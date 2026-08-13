@@ -17,7 +17,7 @@
   {
     "question": "What are customers saying about refunds?",
     "expected_tool": "search_tickets",
-    "notes": "Themes / examples. Do not treat resultCount as volume."
+    "notes": "Themes / examples (minimal hits + get_ticket for body). Do not treat resultCount as volume; relevance_score is ranking only."
   },
   {
     "question": "Find password-reset complaints in German tickets",
@@ -27,7 +27,7 @@
   {
     "question": "How many tickets mention refunds?",
     "expected_tool": "search_metrics",
-    "notes": "FTS match_count. Phrase as lexical match volume, not a human refund label."
+    "notes": "FTS match_count. Phrase as lexical match volume — not semantic topic prevalence."
   },
   {
     "question": "How many high-priority tickets are about password resets?",

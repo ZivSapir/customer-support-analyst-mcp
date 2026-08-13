@@ -1,4 +1,8 @@
-import { DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
+import {
+  DuckDBConnection,
+  DuckDBInstance,
+  type DuckDBValue,
+} from "@duckdb/node-api";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,7 +17,7 @@ export const CSV_PATH = path.join(DATA_DIR, "tickets.csv");
 export const CSV_TMP_PATH = path.join(DATA_DIR, "tickets.csv.tmp");
 export const INGEST_MANIFEST_PATH = path.join(DATA_DIR, "ingest-manifest.json");
 
-export type { DuckDBConnection, DuckDBInstance };
+export type { DuckDBConnection, DuckDBInstance, DuckDBValue };
 
 type CreateDatabaseOptions = {
   readOnly?: boolean;
@@ -22,6 +26,13 @@ type CreateDatabaseOptions = {
   /** Override path (used for atomic ingest into a temp file). */
   path?: string;
 };
+
+type ReadOnlyConnectionOptions = {
+  enableExternalAccess?: boolean;
+};
+
+let sharedInstance: DuckDBInstance | null = null;
+let sharedConn: DuckDBConnection | null = null;
 
 export async function assertDatabaseExists(): Promise<void> {
   try {
@@ -41,7 +52,7 @@ export async function createDatabase(
   if (options.readOnly) {
     // READ_ONLY: do not mutate the .duckdb file.
     // enable_external_access=false: block read_csv/etc. against the host FS.
-    // Search needs FTS LOAD, so that path opts back into external access.
+    // Startup LOAD fts needs a brief window with external access enabled.
     const enableExternalAccess = options.enableExternalAccess === true;
 
     return DuckDBInstance.create(dbPath, {
@@ -53,14 +64,48 @@ export async function createDatabase(
   return DuckDBInstance.create(dbPath);
 }
 
-type ReadOnlyConnectionOptions = {
-  enableExternalAccess?: boolean;
-};
+/**
+ * Open one read-only connection for the MCP server lifetime:
+ * LOAD fts once, then disable external filesystem access.
+ */
+export async function openSharedReadOnlyDatabase(): Promise<void> {
+  if (sharedConn !== null) {
+    return;
+  }
+
+  await assertDatabaseExists();
+  sharedInstance = await createDatabase({
+    readOnly: true,
+    enableExternalAccess: true,
+  });
+  sharedConn = await sharedInstance.connect();
+  await sharedConn.run("LOAD fts;");
+  await sharedConn.run("SET enable_external_access = false;");
+}
+
+export function closeSharedReadOnlyDatabase(): void {
+  if (sharedConn !== null) {
+    sharedConn.closeSync();
+    sharedConn = null;
+  }
+  if (sharedInstance !== null) {
+    sharedInstance.closeSync();
+    sharedInstance = null;
+  }
+}
+
+export function isSharedDatabaseOpen(): boolean {
+  return sharedConn !== null;
+}
 
 export async function withReadOnlyConnection<T>(
   fn: (conn: DuckDBConnection) => Promise<T>,
   options: ReadOnlyConnectionOptions = {},
 ): Promise<T> {
+  if (sharedConn !== null) {
+    return fn(sharedConn);
+  }
+
   await assertDatabaseExists();
   const instance = await createDatabase({
     readOnly: true,
@@ -85,14 +130,24 @@ export async function connect(
 export async function run(
   conn: DuckDBConnection,
   sql: string,
+  values?: DuckDBValue[] | Record<string, DuckDBValue>,
 ): Promise<void> {
-  await conn.run(sql);
+  if (values === undefined) {
+    await conn.run(sql);
+    return;
+  }
+
+  await conn.run(sql, values);
 }
 
 export async function all<T extends Record<string, unknown>>(
   conn: DuckDBConnection,
   sql: string,
+  values?: DuckDBValue[] | Record<string, DuckDBValue>,
 ): Promise<T[]> {
-  const reader = await conn.runAndReadAll(sql);
+  const reader =
+    values === undefined
+      ? await conn.runAndReadAll(sql)
+      : await conn.runAndReadAll(sql, values);
   return reader.getRowObjectsJson() as T[];
 }

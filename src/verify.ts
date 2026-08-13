@@ -108,6 +108,20 @@ async function main(): Promise<void> {
     schema.ticket_tags.tag_values.includes("Refund"),
     "tag_values should include Refund",
   );
+  assert(
+    typeof schema.fields.queue?.description === "string" &&
+      schema.fields.queue.description.toLowerCase().includes("queue"),
+    "schema.fields.queue should include a semantic description",
+  );
+  assert(
+    Array.isArray(schema.fields.type?.values) &&
+      (schema.fields.type.values?.length ?? 0) > 0,
+    "schema.fields.type.values should list allowed type labels",
+  );
+  assert(
+    typeof schema.ticket_tags.fields.tag?.description === "string",
+    "ticket_tags.fields.tag should include a description",
+  );
   console.log(
     `ticket_tags: ${schema.ticket_tags.row_count} rows, ${schema.ticket_tags.tag_values.length} distinct tags`,
   );
@@ -282,6 +296,15 @@ async function main(): Promise<void> {
 
   const hits = await searchTickets({ query: "refund", k: 3 });
   assert(hits.length > 0, "search_tickets('refund') should return hits");
+  assert(
+    typeof hits[0]?.relevance_score === "number" &&
+      Number.isFinite(hits[0].relevance_score),
+    "search hits should expose relevance_score",
+  );
+  assert(
+    !("body_preview" in hits[0]),
+    "search hits should not include body_preview",
+  );
   console.log(`search_tickets refund hits: ${hits.length} (top id ${hits[0]?.ticket_id})`);
 
   const filtered = await searchTickets({

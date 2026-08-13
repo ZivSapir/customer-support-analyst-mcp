@@ -8,10 +8,6 @@ Local MCP server: natural-language Q&A over a support-ticket dataset for analyst
 - **This process** is the MCP server (stdio). It does not call an LLM.
 - **Data** is a local DuckDB file produced by `npm run ingest` (Hugging Face is download-only, not a runtime dependency).
 
-## Delivery milestones
-
-See [LAYERS.md](./LAYERS.md).
-
 ## v1 constraints
 
 - No server-side LLM
