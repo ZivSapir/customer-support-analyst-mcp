@@ -4,8 +4,8 @@ Goal: prepare a local analytical database file before adding query tools.
 
 ## What we added
 
-- `duckdb` dependency in `package.json`
-- `src/db.ts` for tiny DB helpers (connect/run/all)
+- `@duckdb/node-api` (DuckDB Node Neo) in `package.json`
+- `src/db.ts` for DB helpers (`DuckDBInstance` / promise `run` + `all`)
 - `src/ingest.ts` to:
   1. create `data/`
   2. download CSV from Hugging Face (first run only)

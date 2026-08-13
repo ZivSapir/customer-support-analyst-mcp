@@ -116,7 +116,7 @@ server.registerTool(
   {
     title: "Search tickets (full text)",
     description:
-      "Lexical BM25 full-text search over subject and body (tokenization + stemming + ranking). Use for keyword/topic discovery and morphologically related wording — not semantic paraphrases (e.g. refund ≠ money back). Returns ranked examples (max 20), not volume. Optional filters: language, priority, queue, type. For match counts use search_metrics. Call get_schema first.",
+      "Lexical BM25 full-text search over subject and body (DuckDB default English analyzer: tokenization + Porter stemming + ranking). Use for keyword/topic discovery and morphologically related English wording — not semantic paraphrases (e.g. refund ≠ money back). German tickets can be filtered with language=de, but DE FTS quality is best-effort. Returns ranked examples (max 20), not volume. Optional filters: language, priority, queue, type. For match counts use search_metrics. Call get_schema first.",
     inputSchema: {
       query: z
         .string()

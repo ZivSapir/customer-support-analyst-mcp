@@ -30,8 +30,8 @@ async function rebuildDatabase(): Promise<void> {
     // No existing database file yet.
   }
 
-  const db = createDatabase();
-  const conn = connect(db);
+  const db = await createDatabase();
+  const conn = await connect(db);
 
   try {
     const escapedCsvPath = CSV_PATH.replace(/'/g, "''");
@@ -81,8 +81,8 @@ async function rebuildDatabase(): Promise<void> {
     );
     console.log(`Created DuckDB at ${DB_PATH} with ${stats[0]?.total ?? 0} rows`);
   } finally {
-    conn.close();
-    db.close();
+    conn.closeSync();
+    db.closeSync();
   }
 }
 

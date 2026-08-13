@@ -32,7 +32,7 @@ This file is the source of truth for the design document.
 
 ### Data store
 
-**Chosen:** DuckDB (local single file, e.g. `data/tickets.duckdb`)
+**Chosen:** DuckDB via `@duckdb/node-api` (local single file, e.g. `data/tickets.duckdb`)
 
 **Why:**
 
@@ -115,7 +115,7 @@ See [docs/LAYER1.md](./docs/LAYER1.md) for setup notes and Cursor configuration.
 
 ### What we built
 
-- Added `duckdb` dependency.
+- Added `@duckdb/node-api` (DuckDB Node Neo) dependency.
 - Added `src/db.ts` for shared DB helpers.
 - Added `src/ingest.ts` with script `npm run ingest`.
 - Ingest builds a `tickets` table in `data/tickets.duckdb` from the Hugging Face CSV.
@@ -219,9 +219,9 @@ A warehouse role that can only `SELECT` on allowlisted views is stronger than a 
 | BM25 FTS, not embeddings | No API key; lexical keyword/topic search is enough for this dataset; counts stay on SQL |
 | Index subject + body only | That is customer wording. `answer` is the canned reply — searching it would mix in agent text |
 | Truncate body in the tool result | Keeps MCP payloads small; host can `query_tickets` by `ticket_id` for the full row |
-| Optional `language` filter | Dataset is EN/DE; filter in SQL after scoring |
-| Re-run ingest to build the index | FTS is not a live index; it is created at ingest time |
+| Optional `language` filter | Dataset is EN/DE; filters rows **after** scoring — does not switch the FTS analyzer |
 | Honest “lexical / not paraphrase” wording | Porter stemming ≠ synonym resolution (`refund` ↛ `money back`) |
+| Single default FTS index (English analyzer) | v1 simplicity; document that German FTS is weaker rather than fake locale support |
 
 ### Rejected
 
@@ -230,10 +230,11 @@ A warehouse role that can only `SELECT` on allowlisted views is stronger than a 
 | Vector DB / embeddings | Better semantic/paraphrase recall; adds a model, opaque scores — not required to sound “more AI” for v1 |
 | SQL `LIKE '%refund%'` | Misses stemming and ranking; we already tell the host not to do this |
 | Use search hit count as volume | Ranking ≠ census; schema notes already forbid this |
+| Dual EN/DE FTS indexes in v1 | Correct for German morphology; deferred — honest docs preferred for assignment scope |
 
 ### Production note
 
-English Porter stemming is weaker on German tickets. A production CHEQ pipeline would use language-specific analyzers (or a warehouse search service) and still keep aggregates on SQL. Add embeddings only if product needs synonym/paraphrase recall — hybrid with SQL, not instead of it.
+The default `create_fts_index` uses an **English-centric analyzer** (Porter stemmer, English stopwords). That is stronger than “Porter is a bit weak on German”: German tickets remain in the table and SQL filters work, but lexical search quality for DE is best-effort. Production would build **per-language indexes** (e.g. German stemmer/stopwords) or use a locale-aware search service, and still keep aggregates on SQL. Add embeddings only if product needs synonym/paraphrase recall — hybrid with SQL, not instead of it.
 
 ---
 
@@ -293,3 +294,30 @@ At scale, the same split holds: search service for match sets, warehouse SQL for
 | --- | --- |
 | Automated LLM eval harness | Needs an API key and a host; out of v1 scope |
 | New column indexes | 28k rows; DuckDB scans are enough. FTS index already exists from Milestone 5 |
+
+---
+
+## Client migration — `@duckdb/node-api` (2026-08-13)
+
+**Goal:** Leave the deprecated Node `duckdb` package before DuckDB 1.5 drops it.
+
+### What we changed
+
+- Dependency: `duckdb` → `@duckdb/node-api` (Node Neo)
+- `src/db.ts`: `DuckDBInstance` / `DuckDBConnection`, native async `run` / `runAndReadAll` (no callback wrappers)
+- Ingest close path uses `closeSync()`
+
+### Decisions made
+
+| Decision | Why |
+| --- | --- |
+| Migrate now for the assignment | Deprecated client is a concrete 2026 review signal; Neo is the supported path |
+| Keep the same helper surface (`run` / `all` / `withReadOnlyConnection`) | Call sites stay small; only the driver changes |
+| Prefer `getRowObjectsJson()` for query rows | JSON-friendly values for MCP tool responses |
+
+### Rejected
+
+| Option | Verdict |
+| --- | --- |
+| Stay on `duckdb@1.4` and document deprecation | Works today; looks like avoided tech debt on a hiring exercise |
+

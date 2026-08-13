@@ -13,7 +13,7 @@ The **host** (Cursor, Claude Code, or Codex) handles natural language. This proc
 | `search_tickets` | Lexical keyword/topic examples (BM25); optional structured filters |
 | `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
 
-Structured counts come from `query_tickets`. Match volumes come from `search_metrics` (lexical FTS). `search_tickets` hits are ranked examples, not volume. FTS is not paraphrase/embedding search.
+Structured counts come from `query_tickets`. Match volumes come from `search_metrics` (lexical FTS). `search_tickets` hits are ranked examples, not volume. FTS is not paraphrase/embedding search. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
 
 Dataset: [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (downloaded once at ingest).
 
@@ -80,7 +80,7 @@ Example file: [mcp.config.example.json](./mcp.config.example.json).
 | High-priority tickets by queue | `query_tickets` |
 | Breakdown by language and priority | `query_tickets` |
 | What are customers saying about refunds? | `search_tickets` |
-| Password-reset complaints in German | `search_tickets` with `language: "de"` |
+| Password-reset tickets in German (by language column) | `query_tickets`, or `search_tickets` with `language: "de"` (FTS is English-optimized) |
 | How many tickets mention refunds? | `search_metrics` |
 | High-priority tickets about password resets (examples) | `search_tickets` with filters |
 | Which queues have the most refund matches? | `search_metrics` with `group_by: "queue"` |

@@ -22,7 +22,7 @@
   {
     "question": "Find password-reset complaints in German tickets",
     "expected_tool": "search_tickets",
-    "notes": "query plus language: de."
+    "notes": "query plus language: de scopes rows. FTS analyzer is still English-default; DE quality is best-effort."
   },
   {
     "question": "How many tickets mention refunds?",

@@ -1,4 +1,4 @@
-import duckdb from "duckdb";
+import { DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +9,8 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 export const DATA_DIR = path.join(REPO_ROOT, "data");
 export const DB_PATH = path.join(DATA_DIR, "tickets.duckdb");
 export const CSV_PATH = path.join(DATA_DIR, "tickets.csv");
+
+export type { DuckDBConnection, DuckDBInstance };
 
 type CreateDatabaseOptions = {
   readOnly?: boolean;
@@ -26,22 +28,22 @@ export async function assertDatabaseExists(): Promise<void> {
   }
 }
 
-export function createDatabase(
+export async function createDatabase(
   options: CreateDatabaseOptions = {},
-): duckdb.Database {
+): Promise<DuckDBInstance> {
   if (options.readOnly) {
     // READ_ONLY: do not mutate the .duckdb file.
     // enable_external_access=false: block read_csv/etc. against the host FS.
     // Search needs FTS LOAD, so that path opts back into external access.
     const enableExternalAccess = options.enableExternalAccess === true;
 
-    return new duckdb.Database(DB_PATH, {
+    return DuckDBInstance.create(DB_PATH, {
       access_mode: "READ_ONLY",
       enable_external_access: enableExternalAccess ? "true" : "false",
     });
   }
 
-  return new duckdb.Database(DB_PATH);
+  return DuckDBInstance.create(DB_PATH);
 }
 
 type ReadOnlyConnectionOptions = {
@@ -49,53 +51,41 @@ type ReadOnlyConnectionOptions = {
 };
 
 export async function withReadOnlyConnection<T>(
-  fn: (conn: duckdb.Connection) => Promise<T>,
+  fn: (conn: DuckDBConnection) => Promise<T>,
   options: ReadOnlyConnectionOptions = {},
 ): Promise<T> {
   await assertDatabaseExists();
-  const db = createDatabase({
+  const instance = await createDatabase({
     readOnly: true,
     enableExternalAccess: options.enableExternalAccess,
   });
-  const conn = connect(db);
+  const conn = await instance.connect();
 
   try {
     return await fn(conn);
   } finally {
-    conn.close();
-    db.close();
+    conn.closeSync();
+    instance.closeSync();
   }
 }
 
-export function connect(db: duckdb.Database): duckdb.Connection {
-  return db.connect();
+export async function connect(
+  instance: DuckDBInstance,
+): Promise<DuckDBConnection> {
+  return instance.connect();
 }
 
-export function run(conn: duckdb.Connection, sql: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    conn.run(sql, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
+export async function run(
+  conn: DuckDBConnection,
+  sql: string,
+): Promise<void> {
+  await conn.run(sql);
 }
 
-export function all<T extends Record<string, unknown>>(
-  conn: duckdb.Connection,
+export async function all<T extends Record<string, unknown>>(
+  conn: DuckDBConnection,
   sql: string,
 ): Promise<T[]> {
-  return new Promise((resolve, reject) => {
-    conn.all(sql, (error, rows) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve((rows ?? []) as T[]);
-    });
-  });
+  const reader = await conn.runAndReadAll(sql);
+  return reader.getRowObjectsJson() as T[];
 }
