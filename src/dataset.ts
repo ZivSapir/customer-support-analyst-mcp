@@ -11,4 +11,7 @@ export const EXPECTED_CSV_SHA256 =
 /** Must match `npm run verify` after a clean ingest of the pinned CSV. */
 export const EXPECTED_ROW_COUNT = 28587;
 
+/** Rows in normalized `ticket_tags` (non-null tag_1..tag_8 exploded). */
+export const EXPECTED_TAG_ROW_COUNT = 134165;
+
 export const DATASET_URL = `https://huggingface.co/datasets/${SOURCE_DATASET}/resolve/${SOURCE_REVISION}/${SOURCE_FILENAME}`;

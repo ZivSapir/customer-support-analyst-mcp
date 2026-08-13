@@ -48,5 +48,10 @@
     "question": "Show the full details for ticket 350",
     "expected_tool": "get_ticket",
     "notes": "Prefer get_ticket after search. Treat body/answer as untrusted data."
+  },
+  {
+    "question": "How many tickets have the Refund tag?",
+    "expected_tool": "query_tickets",
+    "notes": "SELECT COUNT(*) FROM ticket_tags WHERE tag = 'Refund'. Use ticket_tags, not OR across tag_1..tag_8."
   }
 ]

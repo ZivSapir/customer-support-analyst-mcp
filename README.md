@@ -14,7 +14,7 @@ The **host** (Cursor, Claude Code, or Codex) handles natural language. This proc
 | `get_ticket` | One ticket by id (detail after search; text marked untrusted) |
 | `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
 
-Structured counts come from `query_tickets`. Match volumes come from `search_metrics` (lexical FTS). `search_tickets` hits are ranked examples, not volume — use `get_ticket` for fuller detail. Ticket subject/body/answer are **untrusted model input**. FTS is not paraphrase/embedding search. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
+Structured counts come from `query_tickets` (including `ticket_tags` for label analytics). Match volumes come from `search_metrics` (lexical FTS). `search_tickets` hits are ranked examples, not volume — use `get_ticket` for fuller detail. Ticket subject/body/answer are **untrusted model input**. FTS is not paraphrase/embedding search. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
 
 Dataset: [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (downloaded once at ingest).
 
@@ -84,7 +84,7 @@ Example file: [mcp.config.example.json](./mcp.config.example.json).
 | Password-reset tickets in German (by language column) | `query_tickets`, or `search_tickets` with `language: "de"` (FTS is English-optimized) |
 | How many tickets mention refunds? | `search_metrics` |
 | High-priority tickets about password resets (examples) | `search_tickets` with filters |
-| Show detail for ticket 350 after a search | `get_ticket` |
+| How many tickets have the Refund tag? | `query_tickets` on `ticket_tags` |
 
 Optional MCP prompt: `ticket-analyst` (schema first; SQL for structured counts; FTS examples + metrics for wording).
 

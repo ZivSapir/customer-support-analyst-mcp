@@ -4,6 +4,7 @@ import {
   DATASET_URL,
   EXPECTED_CSV_SHA256,
   EXPECTED_ROW_COUNT,
+  EXPECTED_TAG_ROW_COUNT,
   SOURCE_DATASET,
   SOURCE_FILENAME,
   SOURCE_REVISION,
@@ -28,6 +29,7 @@ export type IngestManifest = {
   source_url: string;
   csv_sha256: string;
   row_count: number;
+  tag_row_count: number;
   ingested_at: string;
 };
 
@@ -113,6 +115,7 @@ async function rebuildDatabase(csvSha256: string): Promise<number> {
   const conn = await connect(db);
 
   let rowCount = 0;
+  let tagRowCount = 0;
 
   try {
     const escapedCsvPath = CSV_PATH.replace(/'/g, "''");
@@ -167,6 +170,43 @@ async function rebuildDatabase(csvSha256: string): Promise<number> {
         `Ingest row_count ${rowCount} !== expected ${EXPECTED_ROW_COUNT}. Refusing to replace the database.`,
       );
     }
+
+    console.log("Normalizing tags into ticket_tags...");
+    await run(
+      conn,
+      `
+      CREATE TABLE ticket_tags AS
+      SELECT ticket_id, tag
+      FROM (
+        SELECT ticket_id, tag_1 AS tag FROM tickets WHERE tag_1 IS NOT NULL AND trim(tag_1) <> ''
+        UNION ALL
+        SELECT ticket_id, tag_2 AS tag FROM tickets WHERE tag_2 IS NOT NULL AND trim(tag_2) <> ''
+        UNION ALL
+        SELECT ticket_id, tag_3 AS tag FROM tickets WHERE tag_3 IS NOT NULL AND trim(tag_3) <> ''
+        UNION ALL
+        SELECT ticket_id, tag_4 AS tag FROM tickets WHERE tag_4 IS NOT NULL AND trim(tag_4) <> ''
+        UNION ALL
+        SELECT ticket_id, tag_5 AS tag FROM tickets WHERE tag_5 IS NOT NULL AND trim(tag_5) <> ''
+        UNION ALL
+        SELECT ticket_id, tag_6 AS tag FROM tickets WHERE tag_6 IS NOT NULL AND trim(tag_6) <> ''
+        UNION ALL
+        SELECT ticket_id, tag_7 AS tag FROM tickets WHERE tag_7 IS NOT NULL AND trim(tag_7) <> ''
+        UNION ALL
+        SELECT ticket_id, tag_8 AS tag FROM tickets WHERE tag_8 IS NOT NULL AND trim(tag_8) <> ''
+      ) exploded;
+      `,
+    );
+
+    const tagStats = await all<{ total: number }>(
+      conn,
+      "SELECT COUNT(*)::INTEGER AS total FROM ticket_tags;",
+    );
+    tagRowCount = Number(tagStats[0]?.total ?? 0);
+    if (tagRowCount !== EXPECTED_TAG_ROW_COUNT) {
+      throw new Error(
+        `ticket_tags row_count ${tagRowCount} !== expected ${EXPECTED_TAG_ROW_COUNT}. Refusing to replace the database.`,
+      );
+    }
   } finally {
     conn.closeSync();
     db.closeSync();
@@ -183,10 +223,13 @@ async function rebuildDatabase(csvSha256: string): Promise<number> {
     source_url: DATASET_URL,
     csv_sha256: csvSha256,
     row_count: rowCount,
+    tag_row_count: tagRowCount,
     ingested_at: new Date().toISOString(),
   });
 
-  console.log(`Created DuckDB at ${DB_PATH} with ${rowCount} rows`);
+  console.log(
+    `Created DuckDB at ${DB_PATH} with ${rowCount} ticket rows and ${tagRowCount} tag rows`,
+  );
   return rowCount;
 }
 

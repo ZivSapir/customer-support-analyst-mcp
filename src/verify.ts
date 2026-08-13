@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   EXPECTED_CSV_SHA256,
   EXPECTED_ROW_COUNT,
+  EXPECTED_TAG_ROW_COUNT,
   SOURCE_DATASET,
   SOURCE_REVISION,
 } from "./dataset.js";
@@ -22,10 +23,13 @@ import { getTicket } from "./ticket.js";
 /** Pinned aggregates for the Hugging Face revision used by `npm run ingest`. */
 const EXPECTED = {
   rowCount: EXPECTED_ROW_COUNT,
+  tagRowCount: EXPECTED_TAG_ROW_COUNT,
   highPriority: 11178,
   languageDe: 12249,
   languageEn: 16338,
   refundMatchCount: 20,
+  refundTagCount: 538,
+  distinctTags: 1255,
   columns: 17,
 } as const;
 
@@ -88,6 +92,25 @@ async function main(): Promise<void> {
     `expected ${EXPECTED.columns} columns`,
   );
   console.log(`schema: ${schema.row_count} rows, ${schema.columns.length} columns`);
+  assert(
+    schema.ticket_tags.table === "ticket_tags",
+    "schema.ticket_tags.table should be ticket_tags",
+  );
+  assert(
+    schema.ticket_tags.row_count === EXPECTED.tagRowCount,
+    `ticket_tags row_count should be ${EXPECTED.tagRowCount}`,
+  );
+  assert(
+    schema.ticket_tags.tag_values.length === EXPECTED.distinctTags,
+    `expected ${EXPECTED.distinctTags} distinct tags in schema`,
+  );
+  assert(
+    schema.ticket_tags.tag_values.includes("Refund"),
+    "tag_values should include Refund",
+  );
+  console.log(
+    `ticket_tags: ${schema.ticket_tags.row_count} rows, ${schema.ticket_tags.tag_values.length} distinct tags`,
+  );
 
   const counted = await queryScalarN(
     "SELECT COUNT(*)::INTEGER AS n FROM tickets",
@@ -117,6 +140,22 @@ async function main(): Promise<void> {
   assert(en === EXPECTED.languageEn, `language=en should be ${EXPECTED.languageEn}`);
   assert(de + en === EXPECTED.rowCount, "en+de should equal total rows");
   console.log(`language counts: en=${en} de=${de}`);
+
+  const tagRows = await queryScalarN(
+    "SELECT COUNT(*)::INTEGER AS n FROM ticket_tags",
+  );
+  assert(
+    tagRows === EXPECTED.tagRowCount,
+    `ticket_tags COUNT should be ${EXPECTED.tagRowCount}`,
+  );
+  const refundTags = await queryScalarN(
+    "SELECT COUNT(*)::INTEGER AS n FROM ticket_tags WHERE tag = 'Refund'",
+  );
+  assert(
+    refundTags === EXPECTED.refundTagCount,
+    `Refund tag count should be ${EXPECTED.refundTagCount}`,
+  );
+  console.log(`ticket_tags: total=${tagRows} Refund=${refundTags}`);
 
   const drop = validateReadOnlySql("DROP TABLE tickets");
   assert(!drop.ok, "DROP should be rejected by the SQL guard");
@@ -296,6 +335,7 @@ async function main(): Promise<void> {
     source_revision?: string;
     csv_sha256?: string;
     row_count?: number;
+    tag_row_count?: number;
   };
   assert(
     manifest.source_dataset === SOURCE_DATASET,
@@ -313,8 +353,12 @@ async function main(): Promise<void> {
     manifest.row_count === EXPECTED.rowCount,
     "ingest-manifest row_count mismatch",
   );
+  assert(
+    manifest.tag_row_count === EXPECTED.tagRowCount,
+    "ingest-manifest tag_row_count mismatch",
+  );
   console.log(
-    `ingest-manifest: ${manifest.source_dataset}@${String(manifest.source_revision).slice(0, 12)}… rows=${manifest.row_count}`,
+    `ingest-manifest: ${manifest.source_dataset}@${String(manifest.source_revision).slice(0, 12)}… rows=${manifest.row_count} tags=${manifest.tag_row_count}`,
   );
 
   console.log("verify ok");

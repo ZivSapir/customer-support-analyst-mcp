@@ -10,11 +10,12 @@ Goal: prepare a local analytical database file before adding query tools.
 - `src/ingest.ts` to:
   1. create `data/`
   2. download **pinned** CSV (or reuse cache only if sha256 matches)
-  3. build `tickets` into `tickets.duckdb.tmp`, then atomically replace `tickets.duckdb`
-  4. write `data/ingest-manifest.json` (dataset, revision, hash, row_count, time)
-  5. print row count
+  3. build `tickets` + normalized `ticket_tags(ticket_id, tag)` into `tickets.duckdb.tmp`, then atomically replace `tickets.duckdb`
+  4. write `data/ingest-manifest.json` (dataset, revision, hash, row_count, tag_row_count, time)
+  5. print row counts
 
-Ingest does **not** use `ignore_errors` — malformed CSV fails the run.
+Ingest does **not** use `ignore_errors` — malformed CSV fails the run. `tag_1..tag_8` stay on `tickets` for source fidelity; analytics should use `ticket_tags`.
+
 
 ## Why this milestone exists
 

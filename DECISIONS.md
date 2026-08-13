@@ -133,7 +133,8 @@ See [docs/LAYER1.md](./docs/LAYER1.md) for setup notes and Cursor configuration.
 | Pin HF revision + CSV sha256 | Floating `main` is not deterministic; checksum validates cache |
 | Fail without `ignore_errors` | Prefer noisy ingest failure over silent row loss |
 | Build `tickets.duckdb.tmp` then rename | Keep the previous DB until the new build succeeds |
-| Write `ingest-manifest.json` | Provenance for auditability (dataset, revision, hash, row_count, time) |
+| Write `ingest-manifest.json` | Provenance for auditability (dataset, revision, hash, row_count, tag_row_count, time) |
+| Normalize `ticket_tags(ticket_id, tag)` at ingest | Wide `tag_1..tag_8` is awkward for analytics; keep source columns, query the long table |
 
 ### What this unlocks
 
