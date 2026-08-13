@@ -189,7 +189,7 @@ Milestone 3 can expose `get_schema` directly from local DuckDB, without any exte
 | Let the host write SQL | Matches analytics questions; numbers stay auditable |
 | Keyword guard + DB `READ_ONLY` + `enable_external_access=false` on host-SQL paths | Block writes and FS exfil via `read_csv` on `query_tickets`/`get_schema`. Search keeps external access only so FTS can `LOAD` |
 | Wrap every query in `LIMIT 200` | Protects stdio payload and the host context window |
-| Return JSON (`columns`, `rows`, `truncated`) | Host can cite the query result, not paraphrase a blob |
+| Return JSON (`columns`, `rows`, `returnedRowCount`, `truncated`) | Host can cite the query result; `truncated` uses limit+1 so exactly 200 rows is not a false positive |
 | Add `zod` as a direct dependency | MCP SDK uses Zod for tool argument schemas |
 
 ### Rejected
