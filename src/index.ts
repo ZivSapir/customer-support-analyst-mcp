@@ -84,7 +84,7 @@ server.registerTool(
   {
     title: "Query tickets (read-only SQL)",
     description:
-      "Run a single read-only SELECT or WITH query against the tickets table. Use for counts, group-bys, and structured filters on typed columns. Call get_schema first. Results are capped at 200 rows. Do not use SQL LIKE for free-text themes — use search_tickets or search_metrics.",
+      "Run a single read-only SELECT or WITH query against the tickets table. Use for counts, group-bys, and structured filters on typed columns. Call get_schema first. Results are capped at 200 rows, ~2k chars per string field, and ~100KB total JSON — see truncated/truncationReasons. Do not use SQL LIKE for free-text themes — use search_tickets or search_metrics.",
     inputSchema: {
       sql: z
         .string()
