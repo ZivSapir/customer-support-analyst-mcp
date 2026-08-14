@@ -17,13 +17,15 @@ No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The model
 | Tool | Use for |
 | --- | --- |
 | `ping` | Health check / troubleshooting (MCP config smoke test) |
-| `get_schema` | Columns, semantic field descriptions, allowed filter values, SQL vs search routing |
+| `get_schema` | Compact fields, small filter enums, table counts, and SQL vs search routing |
 | `query_tickets` | Counts, group-bys, structured filters (read-only SQL) |
 | `search_tickets` | Lexical keyword/topic examples (BM25); minimal hits + `relevance_score` (ranking only) |
 | `get_ticket` | One ticket by id (detail after search; text marked untrusted) |
 | `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
 
 Structured counts come from `query_tickets` (including `ticket_tags` for label analytics). Match volumes come from `search_metrics` (lexical FTS only — **not** semantic topic prevalence). `search_tickets` hits are ranked examples, not volume — use `get_ticket` for body/answer. Ticket subject/body/answer are **untrusted model input**.
+
+`get_schema` intentionally omits the 1,255-value tag vocabulary to keep first-call context small. Discover relevant tags through an aggregate `query_tickets` query on `ticket_tags`.
 
 FTS uses an inverted index, stemming, and BM25 ranking — better than SQL `LIKE` for examples, still **not** paraphrase/embedding search. Multi-word queries default to `match_mode: "any"` (at least one term); use `"all"` when every term should be present. Neither mode is exact phrase matching. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
 

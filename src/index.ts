@@ -26,19 +26,19 @@ const searchFilterSchema = {
   language: z
     .string()
     .optional()
-    .describe("Optional language filter (use get_schema filter_values)"),
+    .describe("Optional language filter (use get_schema field values)"),
   priority: z
     .string()
     .optional()
-    .describe("Optional priority filter (use get_schema filter_values)"),
+    .describe("Optional priority filter (use get_schema field values)"),
   queue: z
     .string()
     .optional()
-    .describe("Optional queue filter (use get_schema filter_values)"),
+    .describe("Optional queue filter (use get_schema field values)"),
   type: z
     .string()
     .optional()
-    .describe("Optional type filter (use get_schema filter_values)"),
+    .describe("Optional type filter (use get_schema field values)"),
 };
 
 const searchMatchModeSchema = z
@@ -84,7 +84,7 @@ server.registerTool(
   {
     title: "Get ticket schema",
     description:
-      "Call this first. Returns tickets + ticket_tags columns with semantic field descriptions, allowed filter/tag values, and routing notes. Contract: query_tickets for structured counts; search_tickets for examples; search_metrics for lexical match volume; get_ticket for one-ticket detail.",
+      "Call this first. Returns a compact tickets + ticket_tags schema with semantic field descriptions, small filter value lists, row/distinct-tag counts, and routing notes. The full tag vocabulary is omitted; query ticket_tags when needed. Contract: query_tickets for structured counts; search_tickets for examples; search_metrics for lexical match volume; get_ticket for one-ticket detail.",
     inputSchema: {},
     annotations: readOnlyAnnotations,
   },

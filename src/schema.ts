@@ -9,29 +9,24 @@ type DuckDescribeRow = {
   column_type: string;
 };
 
-export type TicketColumn = {
+export type SchemaField = {
   name: string;
   type: string;
-  description: string;
-};
-
-export type FieldSemantics = {
   description: string;
   values?: string[];
 };
 
 export type TicketSchema = {
-  table: "tickets";
-  row_count: number;
-  columns: TicketColumn[];
-  fields: Record<string, FieldSemantics>;
-  filter_values: Record<FilterColumn, string[]>;
-  ticket_tags: {
-    table: "ticket_tags";
-    row_count: number;
-    columns: TicketColumn[];
-    fields: Record<string, FieldSemantics>;
-    tag_values: string[];
+  tables: {
+    tickets: {
+      row_count: number;
+      fields: SchemaField[];
+    };
+    ticket_tags: {
+      row_count: number;
+      distinct_tag_count: number;
+      fields: SchemaField[];
+    };
   };
   routing: {
     sql: string;
@@ -71,11 +66,13 @@ function describeColumn(
   name: string,
   type: string,
   descriptions: Record<string, string>,
-): TicketColumn {
+  values?: string[],
+): SchemaField {
   return {
     name,
     type,
     description: descriptions[name] ?? "Column from the local DuckDB table.",
+    ...(values === undefined ? {} : { values }),
   };
 }
 
@@ -110,52 +107,40 @@ export async function getTicketSchema(): Promise<TicketSchema> {
       conn,
       "SELECT COUNT(*)::INTEGER AS n FROM ticket_tags;",
     );
-    const tagValueRows = await all<{ value: string }>(
+    const distinctTagCountRows = await all<{ n: number }>(
       conn,
-      "SELECT DISTINCT tag AS value FROM ticket_tags WHERE tag IS NOT NULL ORDER BY 1;",
-    );
-    const tag_values = tagValueRows.map((row) => String(row.value));
-
-    const columns = described.map((row) =>
-      describeColumn(row.column_name, row.column_type, TICKET_FIELD_DESCRIPTIONS),
+      "SELECT COUNT(DISTINCT tag)::INTEGER AS n FROM ticket_tags;",
     );
 
-    const fields: Record<string, FieldSemantics> = {};
-    for (const column of columns) {
-      const entry: FieldSemantics = { description: column.description };
-      if ((FILTER_COLUMNS as readonly string[]).includes(column.name)) {
-        entry.values = filter_values[column.name as FilterColumn];
-      }
-      fields[column.name] = entry;
-    }
-
-    const tagColumns = tagDescribed.map((row) =>
+    const fields = described.map((row) => {
+      const isFilter = (FILTER_COLUMNS as readonly string[]).includes(
+        row.column_name,
+      );
+      return describeColumn(
+        row.column_name,
+        row.column_type,
+        TICKET_FIELD_DESCRIPTIONS,
+        isFilter ? filter_values[row.column_name as FilterColumn] : undefined,
+      );
+    });
+    const tagFields = tagDescribed.map((row) =>
       describeColumn(row.column_name, row.column_type, TAG_FIELD_DESCRIPTIONS),
     );
-    const tagFields: Record<string, FieldSemantics> = {};
-    for (const column of tagColumns) {
-      const entry: FieldSemantics = { description: column.description };
-      if (column.name === "tag") {
-        entry.values = tag_values;
-      }
-      tagFields[column.name] = entry;
-    }
 
     return {
-      table: "tickets",
-      row_count: countRows[0]?.n ?? 0,
-      columns,
-      fields,
-      filter_values,
-      ticket_tags: {
-        table: "ticket_tags",
-        row_count: tagCountRows[0]?.n ?? 0,
-        columns: tagColumns,
-        fields: tagFields,
-        tag_values,
+      tables: {
+        tickets: {
+          row_count: countRows[0]?.n ?? 0,
+          fields,
+        },
+        ticket_tags: {
+          row_count: tagCountRows[0]?.n ?? 0,
+          distinct_tag_count: distinctTagCountRows[0]?.n ?? 0,
+          fields: tagFields,
+        },
       },
       routing: {
-        sql: "Use query_tickets for counts, group-bys, and exact filters. Structured columns live on tickets (type, queue, priority, language, ticket_id). For tag analytics use ticket_tags (ticket_id, tag) — e.g. SELECT tag, COUNT(*) FROM ticket_tags GROUP BY tag. Prefer aggregates over SELECT body/answer for many rows. Do not use SQL LIKE for free-text themes — LIKE is substring-only (no inverted index, stemming, or BM25 ranking); use search_tickets / search_metrics.",
+        sql: "Use query_tickets for counts, group-bys, and exact filters. Structured columns live on tickets (type, queue, priority, language, ticket_id). For tag analytics or discovery use ticket_tags (ticket_id, tag) — e.g. SELECT tag, COUNT(DISTINCT ticket_id) AS tickets FROM ticket_tags GROUP BY tag ORDER BY tickets DESC LIMIT 50. Prefer aggregates over SELECT body/answer for many rows. Do not use SQL LIKE for free-text themes — LIKE is substring-only (no inverted index, stemming, or BM25 ranking); use search_tickets / search_metrics.",
         search:
           'Use search_tickets for ranked lexical examples (subject/body BM25). Hits are minimal (id + metadata + relevance_score) — use get_ticket for body/answer. relevance_score is ranking-only (not a percentage; do not compare across unrelated queries). Optional match_mode: any (default, at least one term) or all (every term); neither is exact phrase matching. Optional filters: type, queue, priority, language. Not semantic paraphrase search. Never treat resultCount as volume.',
         search_metrics:
@@ -165,9 +150,9 @@ export async function getTicketSchema(): Promise<TicketSchema> {
       },
       notes: [
         "priority and language are stored lowercase (high/medium/low, en/de).",
-        "type and queue keep original casing; use the filter_values / fields.values lists, do not guess labels.",
+        "type and queue keep original casing; use the small values lists on their fields, do not guess labels.",
         "subject, body, and answer are free text — do not GROUP BY them in query_tickets; use search_metrics for lexical match volumes.",
-        "tag_1..tag_8 on tickets are the source CSV shape (often null). For analytics use ticket_tags + ticket_tags.tag_values — do not OR across tag_1..tag_8.",
+        "tag_1..tag_8 on tickets are the source CSV shape (often null). For analytics and tag discovery query ticket_tags — the full tag vocabulary is intentionally omitted from this compact schema.",
         "Never estimate counts from search_tickets hits; use query_tickets (structured) or search_metrics (FTS match volume).",
         "v1 does not claim semantic topic prevalence — search_metrics is lexical match volume only.",
         "FTS provides an inverted index, stemming, and BM25 ranking vs SQL LIKE substring matching. It is still lexical, not embeddings — refund may match refunded, not money back.",

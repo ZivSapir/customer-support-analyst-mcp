@@ -84,48 +84,54 @@ async function assertEvalQuestionsFile(): Promise<void> {
 
 async function main(): Promise<void> {
   const schema = await getTicketSchema();
-  assert(schema.table === "tickets", "schema.table should be tickets");
+  const ticketsSchema = schema.tables.tickets;
+  const tagsSchema = schema.tables.ticket_tags;
   assert(
-    schema.row_count === EXPECTED.rowCount,
-    `schema.row_count should be ${EXPECTED.rowCount} (got ${schema.row_count}) — partial ingest?`,
+    ticketsSchema.row_count === EXPECTED.rowCount,
+    `tickets row_count should be ${EXPECTED.rowCount} (got ${ticketsSchema.row_count}) — partial ingest?`,
   );
   assert(
-    schema.columns.length === EXPECTED.columns,
+    ticketsSchema.fields.length === EXPECTED.columns,
     `expected ${EXPECTED.columns} columns`,
   );
-  console.log(`schema: ${schema.row_count} rows, ${schema.columns.length} columns`);
-  assert(
-    schema.ticket_tags.table === "ticket_tags",
-    "schema.ticket_tags.table should be ticket_tags",
+  console.log(
+    `schema: ${ticketsSchema.row_count} rows, ${ticketsSchema.fields.length} fields`,
   );
   assert(
-    schema.ticket_tags.row_count === EXPECTED.tagRowCount,
+    tagsSchema.row_count === EXPECTED.tagRowCount,
     `ticket_tags row_count should be ${EXPECTED.tagRowCount}`,
   );
   assert(
-    schema.ticket_tags.tag_values.length === EXPECTED.distinctTags,
-    `expected ${EXPECTED.distinctTags} distinct tags in schema`,
+    tagsSchema.distinct_tag_count === EXPECTED.distinctTags,
+    `expected ${EXPECTED.distinctTags} distinct tags`,
+  );
+  const queueField = ticketsSchema.fields.find((field) => field.name === "queue");
+  assert(
+    typeof queueField?.description === "string" &&
+      queueField.description.toLowerCase().includes("queue"),
+    "queue field should include a semantic description",
+  );
+  const typeField = ticketsSchema.fields.find((field) => field.name === "type");
+  assert(
+    Array.isArray(typeField?.values) && (typeField.values?.length ?? 0) > 0,
+    "type field values should list allowed labels",
+  );
+  const tagField = tagsSchema.fields.find((field) => field.name === "tag");
+  assert(
+    typeof tagField?.description === "string",
+    "ticket_tags tag field should include a description",
   );
   assert(
-    schema.ticket_tags.tag_values.includes("Refund"),
-    "tag_values should include Refund",
+    tagField?.values === undefined,
+    "compact schema should not dump the full tag vocabulary",
   );
+  const schemaBytes = Buffer.byteLength(JSON.stringify(schema), "utf8");
   assert(
-    typeof schema.fields.queue?.description === "string" &&
-      schema.fields.queue.description.toLowerCase().includes("queue"),
-    "schema.fields.queue should include a semantic description",
-  );
-  assert(
-    Array.isArray(schema.fields.type?.values) &&
-      (schema.fields.type.values?.length ?? 0) > 0,
-    "schema.fields.type.values should list allowed type labels",
-  );
-  assert(
-    typeof schema.ticket_tags.fields.tag?.description === "string",
-    "ticket_tags.fields.tag should include a description",
+    schemaBytes <= 12_000,
+    `compact schema should stay under 12KB (got ${schemaBytes} bytes)`,
   );
   console.log(
-    `ticket_tags: ${schema.ticket_tags.row_count} rows, ${schema.ticket_tags.tag_values.length} distinct tags`,
+    `ticket_tags: ${tagsSchema.row_count} rows, ${tagsSchema.distinct_tag_count} distinct tags; schema=${schemaBytes} bytes`,
   );
 
   const counted = await queryScalarN(

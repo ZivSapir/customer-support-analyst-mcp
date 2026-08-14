@@ -41,7 +41,7 @@ Architecture and rejected alternatives for the submission. Prefer this file over
 | Tool | Contract |
 | --- | --- |
 | `ping` | Health / troubleshooting only |
-| `get_schema` | Columns + semantic field descriptions + filter/tag values + routing |
+| `get_schema` | Compact field metadata + small filter enums + counts + routing; large tag vocabulary omitted |
 | `query_tickets` | Host SQL for structured counts/filters; caps + heuristic guard; DB read-only + external access off |
 | `search_tickets` | Minimal ranked lexical examples (`relevance_score` = ranking only); not volume |
 | `search_metrics` | Lexical FTS match volume / group-by — **not** semantic topic prevalence |
