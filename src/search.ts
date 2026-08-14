@@ -16,7 +16,12 @@ export const SEARCH_FILTER_COLUMNS = [
   "language",
 ] as const;
 
+export const SEARCH_MATCH_MODES = ["any", "all"] as const;
+
 export type SearchFilterColumn = (typeof SEARCH_FILTER_COLUMNS)[number];
+export type SearchMatchMode = (typeof SEARCH_MATCH_MODES)[number];
+
+export const DEFAULT_SEARCH_MATCH_MODE: SearchMatchMode = "any";
 
 export type SearchTicketsFilters = {
   language?: string;
@@ -28,12 +33,14 @@ export type SearchTicketsFilters = {
 export type SearchTicketsInput = SearchTicketsFilters & {
   query: string;
   k?: number;
+  match_mode?: SearchMatchMode;
 };
 
 export type SearchTicketHit = {
   ticket_id: number;
   relevance_score: number;
   subject: string;
+  type: string;
   language: string;
   queue: string;
   priority: string;
@@ -42,10 +49,12 @@ export type SearchTicketHit = {
 export type SearchMetricsInput = SearchTicketsFilters & {
   query: string;
   group_by?: SearchFilterColumn;
+  match_mode?: SearchMatchMode;
 };
 
 export type SearchMetricsResult = {
   query: string;
+  match_mode: SearchMatchMode;
   semantics: string;
   filters: SearchTicketsFilters;
   group_by: SearchFilterColumn | null;
@@ -108,6 +117,24 @@ function assertNonEmptyQuery(query: string): string {
   return trimmed;
 }
 
+function resolveMatchMode(matchMode: SearchMatchMode | undefined): SearchMatchMode {
+  return matchMode ?? DEFAULT_SEARCH_MATCH_MODE;
+}
+
+/** DuckDB FTS: conjunctive 0 = any term; 1 = all terms (not phrase match). */
+function matchBm25Sql(matchMode: SearchMatchMode): string {
+  const conjunctive = matchMode === "all" ? 1 : 0;
+  return `fts_main_tickets.match_bm25(ticket_id, $1, conjunctive := ${conjunctive})`;
+}
+
+function matchModeSemantics(matchMode: SearchMatchMode): string {
+  const termRule =
+    matchMode === "all"
+      ? "match_mode=all requires every query term (after stemming/stopwords)"
+      : "match_mode=any (default) matches if any query term occurs";
+  return `Lexical BM25 FTS match count over subject/body — ${termRule}; neither mode is exact phrase matching. Ranking score is for ordering only; match_count is lexical volume, not a semantic label.`;
+}
+
 async function withFtsConnection<T>(
   fn: (conn: DuckDBConnection) => Promise<T>,
 ): Promise<T> {
@@ -124,6 +151,7 @@ export async function searchTickets(
   input: SearchTicketsInput,
 ): Promise<SearchTicketHit[]> {
   const query = assertNonEmptyQuery(input.query);
+  const matchMode = resolveMatchMode(input.match_mode);
   const k = Math.min(Math.max(input.k ?? DEFAULT_SEARCH_K, 1), MAX_SEARCH_K);
   const structuredFilters = buildStructuredFilters(input);
   const limitParamIndex = structuredFilters.values.length + 2;
@@ -133,6 +161,7 @@ export async function searchTickets(
       ticket_id: number | bigint;
       relevance_score: number;
       subject: string;
+      type: string;
       language: string;
       queue: string;
       priority: string;
@@ -143,6 +172,7 @@ export async function searchTickets(
         ticket_id,
         relevance_score,
         subject,
+        type,
         language,
         queue,
         priority
@@ -150,10 +180,11 @@ export async function searchTickets(
         SELECT
           ticket_id,
           subject,
+          type,
           language,
           queue,
           priority,
-          fts_main_tickets.match_bm25(ticket_id, $1) AS relevance_score
+          ${matchBm25Sql(matchMode)} AS relevance_score
         FROM tickets
       ) ranked
       WHERE relevance_score IS NOT NULL
@@ -168,6 +199,7 @@ export async function searchTickets(
       ticket_id: toJsonSafeNumber(row.ticket_id),
       relevance_score: toJsonSafeNumber(row.relevance_score),
       subject: String(row.subject ?? ""),
+      type: String(row.type ?? ""),
       language: String(row.language ?? ""),
       queue: String(row.queue ?? ""),
       priority: String(row.priority ?? ""),
@@ -179,6 +211,7 @@ export async function searchMetrics(
   input: SearchMetricsInput,
 ): Promise<SearchMetricsResult> {
   const query = assertNonEmptyQuery(input.query);
+  const matchMode = resolveMatchMode(input.match_mode);
   const structuredFilters = buildStructuredFilters(input);
   const filters: SearchTicketsFilters = {
     language: input.language,
@@ -187,8 +220,7 @@ export async function searchMetrics(
     type: input.type,
   };
 
-  const semantics =
-    "Lexical BM25 FTS match count over subject/body — ranking score is for ordering only; match_count is lexical volume, not a semantic label.";
+  const semantics = matchModeSemantics(matchMode);
 
   return withFtsConnection(async (conn) => {
     const matchedCte = `
@@ -199,7 +231,7 @@ export async function searchMetrics(
           queue,
           priority,
           language,
-          fts_main_tickets.match_bm25(ticket_id, $1) AS relevance_score
+          ${matchBm25Sql(matchMode)} AS relevance_score
         FROM tickets
       )
       `;
@@ -219,6 +251,7 @@ export async function searchMetrics(
 
       return {
         query,
+        match_mode: matchMode,
         semantics,
         filters,
         group_by: null,
@@ -254,6 +287,7 @@ export async function searchMetrics(
 
     return {
       query,
+      match_mode: matchMode,
       semantics,
       filters,
       group_by: groupBy,

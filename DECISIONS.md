@@ -51,6 +51,8 @@ Correctness comes from **tool contracts**, not prompt obedience. The optional `t
 
 **FTS vs LIKE:** BM25 uses an inverted index, stemming, and ranking. `LIKE '%x%'` is substring-only. FTS is still **lexical** — not paraphrase/embedding search (`refund` ↛ `money back`). Dataset is EN+DE; SQL works for both; FTS analyzer is English-default (DE best-effort).
 
+**Multi-word FTS:** DuckDB `match_bm25` defaults to disjunctive term matching. Both search tools expose `match_mode`: `any` (default, at least one term) or `all` (every term after stemming/stopwords). Neither mode is exact phrase matching — prefer `all` for topic-like multi-word counts (e.g. `password reset`).
+
 **Security (v1 honesty):** Keyword guard is a convenience filter, not a sandbox. Host-SQL paths use `READ_ONLY` + `enable_external_access=false` (after startup `LOAD fts`). Risk remains: over-broad SQL, resource exhaustion, and ticket text as prompt-injection into the host model. Production: SELECT-only identity, governed views, query budgets/timeouts; prefer a typed analytics API over free SQL from the model.
 
 ## Runtime details

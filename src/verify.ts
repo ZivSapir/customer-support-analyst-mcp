@@ -28,6 +28,8 @@ const EXPECTED = {
   languageDe: 12249,
   languageEn: 16338,
   refundMatchCount: 20,
+  passwordResetAnyCount: 917,
+  passwordResetAllCount: 222,
   refundTagCount: 538,
   distinctTags: 1255,
   columns: 17,
@@ -319,6 +321,55 @@ async function main(): Promise<void> {
   );
   console.log(`search_tickets refund+high hits: ${filtered.length}`);
 
+  const typeFiltered = await searchTickets({
+    query: "refund",
+    k: 5,
+    type: "Incident",
+  });
+  assert(typeFiltered.length > 0, "search_tickets refund+Incident should return hits");
+  assert(
+    typeFiltered.every((hit) => hit.type === "Incident"),
+    "search_tickets type filter should only return Incident",
+  );
+  console.log(`search_tickets refund+Incident hits: ${typeFiltered.length}`);
+
+  const queueFiltered = await searchTickets({
+    query: "refund",
+    k: 5,
+    queue: "Billing and Payments",
+  });
+  assert(
+    queueFiltered.length > 0,
+    "search_tickets refund+Billing and Payments should return hits",
+  );
+  assert(
+    queueFiltered.every((hit) => hit.queue === "Billing and Payments"),
+    "search_tickets queue filter should only return Billing and Payments",
+  );
+  console.log(
+    `search_tickets refund+Billing and Payments hits: ${queueFiltered.length}`,
+  );
+
+  const combinedFilters = await searchTickets({
+    query: "refund",
+    k: 5,
+    type: "Incident",
+    priority: "high",
+    language: "en",
+  });
+  assert(
+    combinedFilters.every(
+      (hit) =>
+        hit.type === "Incident" &&
+        hit.priority === "high" &&
+        hit.language === "en",
+    ),
+    "search_tickets combined type+priority+language filters should all apply",
+  );
+  console.log(
+    `search_tickets refund+Incident+high+en hits: ${combinedFilters.length}`,
+  );
+
   const deHits = await searchTickets({
     query: "account",
     k: 3,
@@ -335,7 +386,29 @@ async function main(): Promise<void> {
     metrics.match_count === EXPECTED.refundMatchCount,
     `search_metrics('refund') should be ${EXPECTED.refundMatchCount} (got ${metrics.match_count})`,
   );
+  assert(metrics.match_mode === "any", "search_metrics default match_mode should be any");
   console.log(`search_metrics refund match_count: ${metrics.match_count}`);
+
+  const passwordAny = await searchMetrics({ query: "password reset" });
+  assert(
+    passwordAny.match_count === EXPECTED.passwordResetAnyCount,
+    `search_metrics('password reset') any should be ${EXPECTED.passwordResetAnyCount} (got ${passwordAny.match_count})`,
+  );
+  const passwordAll = await searchMetrics({
+    query: "password reset",
+    match_mode: "all",
+  });
+  assert(
+    passwordAll.match_count === EXPECTED.passwordResetAllCount,
+    `search_metrics('password reset') all should be ${EXPECTED.passwordResetAllCount} (got ${passwordAll.match_count})`,
+  );
+  assert(
+    passwordAll.match_count < passwordAny.match_count,
+    "match_mode=all should be stricter than any for multi-word queries",
+  );
+  console.log(
+    `search_metrics password reset: any=${passwordAny.match_count} all=${passwordAll.match_count}`,
+  );
 
   const byQueue = await searchMetrics({
     query: "refund",

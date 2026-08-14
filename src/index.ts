@@ -41,6 +41,13 @@ const searchFilterSchema = {
     .describe("Optional type filter (use get_schema filter_values)"),
 };
 
+const searchMatchModeSchema = z
+  .enum(["any", "all"])
+  .optional()
+  .describe(
+    'Multi-word term logic: "any" (default) = at least one query term; "all" = every term after stemming/stopwords. Neither mode is exact phrase matching.',
+  );
+
 function textResult(
   text: string,
   isError = false,
@@ -156,7 +163,7 @@ server.registerTool(
   {
     title: "Search tickets (full text)",
     description:
-      "Lexical BM25 full-text search over subject and body (inverted index + Porter stemming + ranking — better than SQL LIKE for examples, still not paraphrase/embedding search). Returns minimal ranked hits: ticket_id, relevance_score, subject, queue, priority, language (no body preview — use get_ticket). relevance_score is ranking-only, not a percentage, and not comparable across unrelated queries. resultCount is never volume — use search_metrics. Optional filters: language, priority, queue, type. Max 20 hits. Call get_schema first.",
+      'Lexical BM25 full-text search over subject and body (inverted index + Porter stemming + ranking — better than SQL LIKE for examples, still not paraphrase/embedding search). Returns minimal ranked hits: ticket_id, relevance_score, subject, type, queue, priority, language (no body preview — use get_ticket). relevance_score is ranking-only, not a percentage, and not comparable across unrelated queries. resultCount is never volume — use search_metrics. Multi-word queries: match_mode "any" (default) = at least one term; "all" = every term; neither is exact phrase matching. Optional filters: language, priority, queue, type. Max 20 hits. Call get_schema first.',
     inputSchema: {
       query: z
         .string()
@@ -168,15 +175,17 @@ server.registerTool(
         .max(20)
         .optional()
         .describe("Maximum number of tickets to return (default 5)"),
+      match_mode: searchMatchModeSchema,
       ...searchFilterSchema,
     },
     annotations: readOnlyAnnotations,
   },
-  async ({ query, k, language, priority, queue, type }) => {
+  async ({ query, k, match_mode, language, priority, queue, type }) => {
     try {
       const results = await searchTickets({
         query,
         k,
+        match_mode,
         language,
         priority,
         queue,
@@ -186,8 +195,9 @@ server.registerTool(
         JSON.stringify(
           {
             query,
+            match_mode: match_mode ?? "any",
             resultCount: results.length,
-            note: "resultCount is the size of this example page, not dataset volume. Use search_metrics for lexical match counts. relevance_score is BM25 ranking only.",
+            note: "resultCount is the size of this example page, not dataset volume. Use search_metrics for lexical match counts. relevance_score is BM25 ranking only. match_mode any/all is term presence, not phrase match.",
             results,
           },
           null,
@@ -209,7 +219,7 @@ server.registerTool(
   {
     title: "Search match metrics (FTS count)",
     description:
-      "Count tickets that lexically match a BM25 FTS query over subject/body (same matcher as search_tickets). Use for 'how many mention X' and optional group_by (queue, priority, type, language). Optional filters: language, priority, queue, type. This is FTS match volume only — not semantic topic prevalence. Call get_schema first.",
+      'Count tickets that lexically match a BM25 FTS query over subject/body (same matcher as search_tickets). Use for "how many mention X" and optional group_by (queue, priority, type, language). Multi-word queries: match_mode "any" (default) = at least one term; "all" = every term after stemming/stopwords — prefer "all" for topic-like phrases (e.g. password reset); neither mode is exact phrase matching. Optional filters: language, priority, queue, type. This is FTS match volume only — not semantic topic prevalence. Call get_schema first.',
     inputSchema: {
       query: z
         .string()
@@ -218,15 +228,17 @@ server.registerTool(
         .enum(["type", "queue", "priority", "language"])
         .optional()
         .describe("Optional structured column to group match counts by"),
+      match_mode: searchMatchModeSchema,
       ...searchFilterSchema,
     },
     annotations: readOnlyAnnotations,
   },
-  async ({ query, group_by, language, priority, queue, type }) => {
+  async ({ query, group_by, match_mode, language, priority, queue, type }) => {
     try {
       const result = await searchMetrics({
         query,
         group_by,
+        match_mode,
         language,
         priority,
         queue,

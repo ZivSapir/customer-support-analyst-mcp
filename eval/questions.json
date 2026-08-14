@@ -22,7 +22,7 @@
   {
     "question": "Find password-reset complaints in German tickets",
     "expected_tool": "search_tickets",
-    "notes": "query plus language: de scopes rows. FTS analyzer is still English-default; DE quality is best-effort."
+    "notes": "query plus language: de scopes rows. Prefer match_mode: all for multi-word topics (not phrase match). FTS analyzer is still English-default; DE quality is best-effort."
   },
   {
     "question": "How many tickets mention refunds?",
@@ -32,7 +32,7 @@
   {
     "question": "How many high-priority tickets are about password resets?",
     "expected_tool": "search_metrics",
-    "notes": "query plus priority: high. Optionally search_tickets for examples."
+    "notes": "query password reset with match_mode: all and priority: high (any would OR the terms and inflate the count). Optionally search_tickets for examples."
   },
   {
     "question": "Which queues have the most complaints about refunds?",

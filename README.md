@@ -25,7 +25,7 @@ No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The model
 
 Structured counts come from `query_tickets` (including `ticket_tags` for label analytics). Match volumes come from `search_metrics` (lexical FTS only — **not** semantic topic prevalence). `search_tickets` hits are ranked examples, not volume — use `get_ticket` for body/answer. Ticket subject/body/answer are **untrusted model input**.
 
-FTS uses an inverted index, stemming, and BM25 ranking — better than SQL `LIKE` for examples, still **not** paraphrase/embedding search. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
+FTS uses an inverted index, stemming, and BM25 ranking — better than SQL `LIKE` for examples, still **not** paraphrase/embedding search. Multi-word queries default to `match_mode: "any"` (at least one term); use `"all"` when every term should be present. Neither mode is exact phrase matching. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
 
 **Dataset:** [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (Hugging Face Support_Dataset linked from the assignment; downloaded once at ingest).
 
@@ -90,7 +90,7 @@ Example file: [mcp.config.example.json](./mcp.config.example.json).
 | High-priority tickets by queue | `query_tickets` |
 | Breakdown by language and priority | `query_tickets` |
 | What are customers saying about refunds? | `search_tickets` |
-| Password-reset tickets in German (by language column) | `query_tickets`, or `search_tickets` with `language: "de"` (FTS is English-optimized) |
+| Password-reset tickets in German (by language column) | `query_tickets`, or `search_tickets` with `language: "de"` and preferably `match_mode: "all"` (FTS is English-optimized) |
 | How many tickets mention refunds? | `search_metrics` |
 | High-priority tickets about password resets (examples) | `search_tickets` with filters |
 | How many tickets have the Refund tag? | `query_tickets` on `ticket_tags` |
