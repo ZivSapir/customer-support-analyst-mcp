@@ -17,7 +17,7 @@
   {
     "question": "What are customers saying about refunds?",
     "expected_tool": "search_tickets",
-    "notes": "Themes / examples (minimal hits + get_ticket for body). Do not treat resultCount as volume; relevance_score is ranking only."
+    "notes": "Themes / examples (minimal hits + get_ticket for body). Do not treat returnedHitCount as volume; relevance_score is ranking only."
   },
   {
     "question": "Find password-reset complaints in German tickets",
