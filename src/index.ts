@@ -73,7 +73,7 @@ server.registerTool(
   {
     title: "Ping",
     description:
-      "Health check / troubleshooting. Call this to verify the MCP server is connected and responding. Does not touch the dataset.",
+      "Health check once the server process is running. Verifies MCP transport only. Startup still requires a local DuckDB file from `npm run ingest` — if ingest was skipped, the process exits before tools are available.",
     inputSchema: {},
     annotations: readOnlyAnnotations,
   },

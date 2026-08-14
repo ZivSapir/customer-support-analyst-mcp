@@ -376,6 +376,10 @@ async function main(): Promise<void> {
     language: "en",
   });
   assert(
+    combinedFilters.length > 0,
+    "search_tickets combined type+priority+language filters should return hits",
+  );
+  assert(
     combinedFilters.every(
       (hit) =>
         hit.type === "Incident" &&
@@ -393,11 +397,22 @@ async function main(): Promise<void> {
     k: 3,
     language: "de",
   });
+  assert(deHits.length > 0, "search_tickets language=de should return hits");
   assert(
     deHits.every((hit) => hit.language === "de"),
     "language=de filter should only return German rows",
   );
   console.log(`search_tickets language=de hits: ${deHits.length} (FTS English-optimized)`);
+
+  let blankFilterRejected = false;
+  try {
+    await searchTickets({ query: "refund", priority: "   " });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    blankFilterRejected = message.includes('Filter "priority" is empty');
+  }
+  assert(blankFilterRejected, "whitespace-only search filters should be rejected");
+  console.log("search filters: whitespace-only priority rejected");
 
   const metrics = await searchMetrics({ query: "refund" });
   assert(

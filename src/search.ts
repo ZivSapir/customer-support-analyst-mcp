@@ -5,6 +5,7 @@ import {
   withReadOnlyConnection,
   type DuckDBConnection,
 } from "./db.js";
+import { MAX_FIELD_CHARS } from "./query.js";
 
 export const DEFAULT_SEARCH_K = 5;
 export const MAX_SEARCH_K = 20;
@@ -67,19 +68,26 @@ type BoundFilters = {
   values: string[];
 };
 
-function toJsonSafeNumber(value: unknown): number {
-  if (typeof value === "bigint") {
-    return Number(value);
+type NormalizedSearchFilters = {
+  applied: SearchTicketsFilters;
+  bound: BoundFilters;
+};
+
+const SUBJECT_TRUNCATE_SUFFIX = "…[truncated]";
+
+function truncateSubject(subject: string): string {
+  if (subject.length <= MAX_FIELD_CHARS) {
+    return subject;
   }
 
-  if (typeof value === "number") {
-    return value;
-  }
-
-  return Number(value);
+  const keep = Math.max(0, MAX_FIELD_CHARS - SUBJECT_TRUNCATE_SUFFIX.length);
+  return `${subject.slice(0, keep)}${SUBJECT_TRUNCATE_SUFFIX}`;
 }
 
-function buildStructuredFilters(filters: SearchTicketsFilters): BoundFilters {
+function normalizeSearchFilters(
+  filters: SearchTicketsFilters,
+): NormalizedSearchFilters {
+  const applied: SearchTicketsFilters = {};
   const clauses: string[] = [];
   const values: string[] = [];
 
@@ -91,22 +99,39 @@ function buildStructuredFilters(filters: SearchTicketsFilters): BoundFilters {
 
     const trimmed = value.trim();
     if (trimmed.length === 0) {
-      continue;
+      throw new Error(
+        `Filter "${column}" is empty. Omit the filter or supply a value from get_schema.`,
+      );
     }
 
-    // Parameter indexes are assigned by the caller after the FTS query ($1).
+    applied[column] = trimmed;
     clauses.push(`${column} = $${clauses.length + 2}`);
     values.push(trimmed);
   }
 
   if (clauses.length === 0) {
-    return { sql: "", values: [] };
+    return { applied, bound: { sql: "", values: [] } };
   }
 
   return {
-    sql: `AND ${clauses.join(" AND ")}`,
-    values,
+    applied,
+    bound: {
+      sql: `AND ${clauses.join(" AND ")}`,
+      values,
+    },
   };
+}
+
+function toJsonSafeNumber(value: unknown): number {
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  if (typeof value === "number") {
+    return value;
+  }
+
+  return Number(value);
 }
 
 function assertNonEmptyQuery(query: string): string {
@@ -153,7 +178,7 @@ export async function searchTickets(
   const query = assertNonEmptyQuery(input.query);
   const matchMode = resolveMatchMode(input.match_mode);
   const k = Math.min(Math.max(input.k ?? DEFAULT_SEARCH_K, 1), MAX_SEARCH_K);
-  const structuredFilters = buildStructuredFilters(input);
+  const { bound: structuredFilters } = normalizeSearchFilters(input);
   const limitParamIndex = structuredFilters.values.length + 2;
 
   return withFtsConnection(async (conn) => {
@@ -198,7 +223,7 @@ export async function searchTickets(
     return rows.map((row) => ({
       ticket_id: toJsonSafeNumber(row.ticket_id),
       relevance_score: toJsonSafeNumber(row.relevance_score),
-      subject: String(row.subject ?? ""),
+      subject: truncateSubject(String(row.subject ?? "")),
       type: String(row.type ?? ""),
       language: String(row.language ?? ""),
       queue: String(row.queue ?? ""),
@@ -212,13 +237,8 @@ export async function searchMetrics(
 ): Promise<SearchMetricsResult> {
   const query = assertNonEmptyQuery(input.query);
   const matchMode = resolveMatchMode(input.match_mode);
-  const structuredFilters = buildStructuredFilters(input);
-  const filters: SearchTicketsFilters = {
-    language: input.language,
-    priority: input.priority,
-    queue: input.queue,
-    type: input.type,
-  };
+  const { applied: filters, bound: structuredFilters } =
+    normalizeSearchFilters(input);
 
   const semantics = matchModeSemantics(matchMode);
 
