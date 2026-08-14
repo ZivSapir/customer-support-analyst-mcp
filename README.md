@@ -29,7 +29,7 @@ Structured counts come from `query_tickets` (including `ticket_tags` for label a
 
 FTS uses an inverted index, stemming, and BM25 ranking — better than SQL `LIKE` for examples, still **not** paraphrase/embedding search. Multi-word queries default to `match_mode: "any"` (at least one term); use `"all"` when every term should be present. Neither mode is exact phrase matching. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
 
-**Dataset:** [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (Hugging Face Support_Dataset linked from the assignment; downloaded once at ingest).
+**Dataset:** [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (Hugging Face Support_Dataset; downloaded once at ingest).
 
 Architecture and rejected alternatives: [DECISIONS.md](./DECISIONS.md).
 
@@ -76,13 +76,35 @@ You should see `ping`, `get_schema`, `query_tickets`, `search_tickets`, `get_tic
 
 ### Claude Code
 
-Same JSON in Claude Code MCP settings (or `~/.claude/claude_desktop_config.json`, depending on install).
+Project-scoped `.mcp.json` in the repo root:
+
+```json
+{
+  "mcpServers": {
+    "customer-support-analyst": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/customer-support-analyst-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+Or via CLI: `claude mcp add --transport stdio customer-support-analyst -- node /ABSOLUTE/PATH/TO/customer-support-analyst-mcp/dist/index.js`
 
 ### Codex
 
-Same `mcpServers` block in the Codex MCP config for your install.
+Add to `~/.codex/config.toml` (or project-scoped `.codex/config.toml` in a trusted project):
 
-Example file: [mcp.config.example.json](./mcp.config.example.json).
+```toml
+[mcp_servers.customer-support-analyst]
+command = "node"
+args = ["/ABSOLUTE/PATH/TO/customer-support-analyst-mcp/dist/index.js"]
+```
+
+Or via CLI: `codex mcp add customer-support-analyst -- node /ABSOLUTE/PATH/TO/customer-support-analyst-mcp/dist/index.js`
+
+Cursor example file: [mcp.config.example.json](./mcp.config.example.json).
 
 ## Example questions
 
@@ -99,7 +121,7 @@ Example file: [mcp.config.example.json](./mcp.config.example.json).
 
 Optional MCP prompt: `ticket-analyst` (reminder only — routing lives in tool contracts + `get_schema`).
 
-Full list of example questions (routing hints for reviewers — **not** an automated LLM eval harness): [eval/questions.json](./eval/questions.json). `npm run verify` checks that file’s shape and pinned DuckDB/FTS expectations.
+Full list of example questions (routing hints for operators — **not** an automated LLM eval harness): [eval/questions.json](./eval/questions.json). `npm run verify` checks that file’s shape and pinned DuckDB/FTS expectations.
 
 ## Scripts
 
@@ -108,5 +130,6 @@ Full list of example questions (routing hints for reviewers — **not** an autom
 | `npm run ingest` | Pinned CSV → `data/tickets.duckdb` + FTS + ingest manifest |
 | `npm run peek` | Print columns + sample rows from local DuckDB |
 | `npm run build` | Compile `src/` → `dist/` |
+| `npm run dev` | Run the stdio server via `tsx` (development) |
 | `npm start` | Run the stdio server |
 | `npm run verify` | Pinned smoke checks (row counts, filters, FTS, SQL guard/FS, eval JSON shape) |

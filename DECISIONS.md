@@ -1,6 +1,6 @@
 # Decision log — Customer Support Analyst MCP
 
-Architecture and rejected alternatives for the submission. Prefer this file over repeating the same rationale in README.
+Architecture and rejected alternatives. Prefer this file over repeating the same rationale in README.
 
 ## Product
 
@@ -34,7 +34,7 @@ Architecture and rejected alternatives for the submission. Prefer this file over
 
 **Ingest:** Separate `npm run ingest` — pinned HF revision, CSV sha256, atomic DB replace, `ingest-manifest.json`. Tables: `tickets` + normalized `ticket_tags(ticket_id, tag)`.
 
-**Dataset:** [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (assignment Support_Dataset link).
+**Dataset:** [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (Hugging Face Support_Dataset).
 
 ## Tool contract
 
@@ -64,6 +64,6 @@ Correctness comes from **tool contracts**, not prompt obedience. The optional `t
 
 ## Deliberately deferred
 
-- Typed `analyze_tickets` (parameterized aggregates, no host SQL) — stronger contract; keep `query_tickets` for this assignment’s auditable-SQL story; production direction.
+- Typed `analyze_tickets` (parameterized aggregates, no host SQL) — stronger contract; keep `query_tickets` for v1’s auditable-SQL story; production direction.
 - Dual EN/DE FTS indexes; embeddings / hybrid search.
 - Full MCP `outputSchema` / `structuredContent`.
