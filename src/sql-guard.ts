@@ -1,3 +1,5 @@
+import { withReadOnlyConnection } from "./db.js";
+
 export type SqlGuardResult =
   | { ok: true; sql: string }
   | { ok: false; error: string };
@@ -54,7 +56,9 @@ function normalize(sql: string): string {
   return sql.trim().replace(/;+\s*$/g, "").trim();
 }
 
-export function validateReadOnlySql(rawSql: string): SqlGuardResult {
+export async function validateReadOnlySql(
+  rawSql: string,
+): Promise<SqlGuardResult> {
   const sql = normalize(rawSql);
 
   if (sql.length === 0) {
@@ -64,17 +68,27 @@ export function validateReadOnlySql(rawSql: string): SqlGuardResult {
   let stripped: string;
 
   try {
-    stripped = stripStringLiterals(stripComments(sql));
+    stripped = stripComments(stripStringLiterals(sql));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, error: message };
   }
 
-  if (stripped.includes(";")) {
-    return {
-      ok: false,
-      error: "Only a single SQL statement is allowed.",
-    };
+  try {
+    const statementCount = await withReadOnlyConnection(async (conn) => {
+      const statements = await conn.extractStatements(sql);
+      return statements.count;
+    });
+
+    if (statementCount !== 1) {
+      return {
+        ok: false,
+        error: "Only a single SQL statement is allowed.",
+      };
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: `Invalid SQL: ${message}` };
   }
 
   if (!/^(select|with)\b/i.test(stripped.trim())) {

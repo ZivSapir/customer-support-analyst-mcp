@@ -45,7 +45,7 @@ function assert(condition: boolean, message: string): void {
 }
 
 async function queryScalarN(sql: string): Promise<number> {
-  const guard = validateReadOnlySql(sql);
+  const guard = await validateReadOnlySql(sql);
   if (!guard.ok) {
     throw new Error(guard.error);
   }
@@ -179,22 +179,23 @@ async function main(): Promise<void> {
   );
   console.log(`ticket_tags: total=${tagRows} Refund=${refundTags}`);
 
-  const drop = validateReadOnlySql("DROP TABLE tickets");
+  const drop = await validateReadOnlySql("DROP TABLE tickets");
   assert(!drop.ok, "DROP should be rejected by the SQL guard");
 
-  const multi = validateReadOnlySql("SELECT 1; DROP TABLE tickets");
+  const multi = await validateReadOnlySql("SELECT 1; DROP TABLE tickets");
   assert(!multi.ok, "multi-statement SQL should be rejected");
 
-  // Known heuristic gap (Issue 2): comment/string tokenization can approve this.
-  // Real teeth are READ_ONLY + enable_external_access=false — exercised above via read_csv.
-  const stringComment = validateReadOnlySql("SELECT '--'; DROP TABLE tickets");
-  console.log(
-    `sql-guard string/comment case: ${stringComment.ok ? "approved (known heuristic gap)" : "rejected"}`,
+  const stringComment = await validateReadOnlySql(
+    "SELECT '--'; DROP TABLE tickets",
   );
-  console.log("sql-guard: DROP/multi rejected");
+  assert(
+    !stringComment.ok,
+    "DuckDB parser should reject hidden multi-statement SQL",
+  );
+  console.log("sql-guard: DROP/multi/string-comment cases rejected");
 
   const fsSql = "SELECT * FROM read_csv('/etc/passwd') LIMIT 1";
-  const fsGuard = validateReadOnlySql(fsSql);
+  const fsGuard = await validateReadOnlySql(fsSql);
   if (!fsGuard.ok) {
     throw new Error(
       "read_csv SELECT should pass the keyword guard (blocked by DuckDB config)",
@@ -209,7 +210,9 @@ async function main(): Promise<void> {
   assert(fsBlocked, "host SQL path should reject external read_csv");
   console.log("external read_csv blocked on query path");
 
-  const uncappedGuard = validateReadOnlySql("SELECT ticket_id FROM tickets");
+  const uncappedGuard = await validateReadOnlySql(
+    "SELECT ticket_id FROM tickets",
+  );
   if (!uncappedGuard.ok) {
     throw new Error(uncappedGuard.error);
   }
@@ -225,7 +228,7 @@ async function main(): Promise<void> {
     `row cap: returnedRowCount=${capped.returnedRowCount} truncated=${capped.truncated}`,
   );
 
-  const exactGuard = validateReadOnlySql(
+  const exactGuard = await validateReadOnlySql(
     `SELECT ticket_id FROM tickets LIMIT ${MAX_SQL_ROWS}`,
   );
   if (!exactGuard.ok) {
@@ -246,7 +249,7 @@ async function main(): Promise<void> {
     `exact ${MAX_SQL_ROWS}: returnedRowCount=${exact.returnedRowCount} truncated=${exact.truncated}`,
   );
 
-  const fatGuard = validateReadOnlySql(
+  const fatGuard = await validateReadOnlySql(
     "SELECT repeat('A', 5000) AS big FROM tickets LIMIT 1",
   );
   if (!fatGuard.ok) {
@@ -267,7 +270,7 @@ async function main(): Promise<void> {
     `field cap: length=${big.length} reasons=${fat.truncationReasons.join(",")}`,
   );
 
-  const payloadGuard = validateReadOnlySql(
+  const payloadGuard = await validateReadOnlySql(
     "SELECT repeat('B', 1800) AS chunk FROM tickets LIMIT 80",
   );
   if (!payloadGuard.ok) {

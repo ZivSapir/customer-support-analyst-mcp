@@ -115,7 +115,7 @@ server.registerTool(
     annotations: readOnlyAnnotations,
   },
   async ({ sql }) => {
-    const guard = validateReadOnlySql(sql);
+    const guard = await validateReadOnlySql(sql);
 
     if (!guard.ok) {
       return textResult(guard.error, true);
