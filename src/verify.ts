@@ -19,6 +19,7 @@ import { getTicketSchema } from "./schema.js";
 import { searchMetrics, searchTickets } from "./search.js";
 import { validateReadOnlySql, wrapWithRowLimit } from "./sql-guard.js";
 import { getTicket } from "./ticket.js";
+import { TICKET_DATA_ENVELOPE } from "./trust.js";
 
 /** Pinned aggregates for the Hugging Face revision used by `npm run ingest`. */
 const EXPECTED = {
@@ -224,6 +225,10 @@ async function main(): Promise<void> {
     `row cap should return ${MAX_SQL_ROWS} rows`,
   );
   assert(capped.truncated, "wide SELECT should set truncated=true");
+  assert(
+    capped.data_envelope.toLowerCase().includes("untrusted"),
+    "query_tickets results should include untrusted data_envelope",
+  );
   console.log(
     `row cap: returnedRowCount=${capped.returnedRowCount} truncated=${capped.truncated}`,
   );
@@ -315,6 +320,10 @@ async function main(): Promise<void> {
   assert(
     !("body_preview" in hits[0]),
     "search hits should not include body_preview",
+  );
+  assert(
+    TICKET_DATA_ENVELOPE.toLowerCase().includes("untrusted"),
+    "shared ticket data_envelope should mark content untrusted",
   );
   console.log(`search_tickets refund hits: ${hits.length} (top id ${hits[0]?.ticket_id})`);
 

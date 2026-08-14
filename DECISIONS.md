@@ -42,8 +42,8 @@ Architecture and rejected alternatives for the submission. Prefer this file over
 | --- | --- |
 | `ping` | Health / troubleshooting only |
 | `get_schema` | Compact field metadata + small filter enums + counts + routing; large tag vocabulary omitted |
-| `query_tickets` | Host SQL for structured counts/filters; DuckDB-parsed single statement + lightweight policy guard; caps; DB read-only + external access off |
-| `search_tickets` | Minimal ranked lexical examples (`relevance_score` = ranking only); not volume |
+| `query_tickets` | Host SQL for structured counts/filters; DuckDB-parsed single statement + lightweight policy guard; caps; DB read-only + external access off; `data_envelope` trust label |
+| `search_tickets` | Minimal ranked lexical examples (`relevance_score` = ranking only); not volume; `data_envelope` on subjects |
 | `search_metrics` | Lexical FTS match volume / group-by — **not** semantic topic prevalence |
 | `get_ticket` | One-ticket detail; `data_envelope` marks text as untrusted |
 

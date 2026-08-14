@@ -18,8 +18,8 @@ No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The model
 | --- | --- |
 | `ping` | Health check / troubleshooting (MCP config smoke test) |
 | `get_schema` | Compact fields, small filter enums, table counts, and SQL vs search routing |
-| `query_tickets` | Counts, group-bys, structured filters (read-only SQL) |
-| `search_tickets` | Lexical keyword/topic examples (BM25); minimal hits + `relevance_score` (ranking only) |
+| `query_tickets` | Counts, group-bys, structured filters (read-only SQL; results labeled untrusted) |
+| `search_tickets` | Lexical keyword/topic examples (BM25); minimal hits + `relevance_score` (ranking only); subjects labeled untrusted |
 | `get_ticket` | One ticket by id (detail after search; text marked untrusted) |
 | `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
 

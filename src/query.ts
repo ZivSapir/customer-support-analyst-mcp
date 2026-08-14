@@ -1,4 +1,5 @@
 import { all, withReadOnlyConnection } from "./db.js";
+import { TICKET_DATA_ENVELOPE } from "./trust.js";
 
 export const MAX_SQL_ROWS = 200;
 /** Cap each string cell so one fat column cannot blow the host context. */
@@ -11,6 +12,7 @@ const FIELD_TRUNCATE_SUFFIX = "…[truncated]";
 export type TruncationReason = "rows" | "fields" | "payload";
 
 export type QueryTicketsResult = {
+  data_envelope: string;
   columns: string[];
   /** Number of rows returned in this payload (not the full query cardinality). */
   returnedRowCount: number;
@@ -95,6 +97,7 @@ export async function executeReadOnlyQuery(
     const build = (nextRows: Record<string, unknown>[]): QueryTicketsResult => {
       const truncationReasons = [...reasons];
       return {
+        data_envelope: TICKET_DATA_ENVELOPE,
         columns: nextRows[0] ? Object.keys(nextRows[0]) : [],
         returnedRowCount: nextRows.length,
         truncated: truncationReasons.length > 0,
