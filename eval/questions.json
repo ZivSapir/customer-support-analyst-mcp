@@ -27,7 +27,7 @@
   {
     "question": "How many tickets mention refunds?",
     "expected_tool": "search_metrics",
-    "notes": "FTS match_count. Phrase as lexical match volume — not semantic topic prevalence."
+    "notes": "FTS match_count. Lexical wording volume — not the Refund tag count and not semantic topic prevalence."
   },
   {
     "question": "How many high-priority tickets are about password resets?",
@@ -52,6 +52,6 @@
   {
     "question": "How many tickets have the Refund tag?",
     "expected_tool": "query_tickets",
-    "notes": "SELECT COUNT(*) FROM ticket_tags WHERE tag = 'Refund'. Use ticket_tags, not OR across tag_1..tag_8."
+    "notes": "SELECT COUNT(DISTINCT ticket_id) FROM ticket_tags WHERE tag = 'Refund'. Label path — not search_metrics. Use ticket_tags, not OR across tag_1..tag_8."
   }
 ]

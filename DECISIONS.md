@@ -49,6 +49,8 @@ Architecture and rejected alternatives. Prefer this file over repeating the same
 
 Correctness comes from **tool contracts**, not prompt obedience. The optional `ticket-analyst` prompt reinforces routing; it is not the security or metrics boundary.
 
+**Tags vs wording:** Explicit labels live on `ticket_tags` (`COUNT(DISTINCT ticket_id)` for ticket counts). “Mention/say/contain X” is lexical FTS via `search_metrics`. Do not present one as the other.
+
 **FTS vs LIKE:** BM25 uses an inverted index, stemming, and ranking. `LIKE '%x%'` is substring-only. FTS is still **lexical** — not paraphrase/embedding search (`refund` ↛ `money back`). Dataset is EN+DE; SQL works for both; FTS analyzer is English-default (DE best-effort).
 
 **Multi-word FTS:** DuckDB `match_bm25` defaults to disjunctive term matching. Both search tools expose `match_mode`: `any` (default, at least one term) or `all` (every term after stemming/stopwords). Neither mode is exact phrase matching — prefer `all` for topic-like multi-word counts (e.g. `password reset`).

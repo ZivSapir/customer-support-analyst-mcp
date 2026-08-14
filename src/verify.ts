@@ -172,7 +172,7 @@ async function main(): Promise<void> {
     `ticket_tags COUNT should be ${EXPECTED.tagRowCount}`,
   );
   const refundTags = await queryScalarN(
-    "SELECT COUNT(*)::INTEGER AS n FROM ticket_tags WHERE tag = 'Refund'",
+    "SELECT COUNT(DISTINCT ticket_id)::INTEGER AS n FROM ticket_tags WHERE tag = 'Refund'",
   );
   assert(
     refundTags === EXPECTED.refundTagCount,

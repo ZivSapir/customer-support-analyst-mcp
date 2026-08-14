@@ -4,13 +4,18 @@ Local [Model Context Protocol](https://modelcontextprotocol.io) server for natur
 
 ## Model
 
-This MCP server does **not** call an LLM itself. Natural-language planning is performed by the MCP **host**.
+This MCP server does **not** call an LLM itself. Natural-language planning is performed by the MCP **host**. The server is model-agnostic: it uses whatever model the host already has configured.
 
-**Tested with:**
+**Tested end-to-end with:**
 
-- Cursor Agent (host-configured model)
+- Cursor Agent — Composer
 
-No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The model is whatever the host already uses.
+**Runnable with the assignment hosts** (same stdio server; configuration below):
+
+- Claude Code
+- Codex
+
+No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The host’s configured model performs planning; this process only executes tools.
 
 ## How it works
 
@@ -25,7 +30,7 @@ No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The model
 
 Structured counts come from `query_tickets` (including `ticket_tags` for label analytics). Match volumes come from `search_metrics` (lexical FTS only — **not** semantic topic prevalence). `search_tickets` hits are ranked examples, not volume — use `get_ticket` for body/answer. Ticket subject/body/answer are **untrusted model input**.
 
-`get_schema` intentionally omits the 1,255-value tag vocabulary to keep first-call context small. Discover relevant tags through an aggregate `query_tickets` query on `ticket_tags`.
+`get_schema` intentionally omits the 1,255-value tag vocabulary to keep first-call context small. Discover relevant tags through an aggregate `query_tickets` query on `ticket_tags` (use `COUNT(DISTINCT ticket_id)` for ticket counts). Wording questions (“mention/say/contain X”) use `search_metrics`; explicit labels use `ticket_tags` — do not treat one as the other.
 
 FTS uses an inverted index, stemming, and BM25 ranking — better than SQL `LIKE` for examples, still **not** paraphrase/embedding search. Multi-word queries default to `match_mode: "any"` (at least one term); use `"all"` when every term should be present. Neither mode is exact phrase matching. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
 
@@ -44,7 +49,7 @@ Architecture and rejected alternatives: [DECISIONS.md](./DECISIONS.md).
 ```bash
 git clone https://github.com/ZivSapir/customer-support-analyst-mcp.git
 cd customer-support-analyst-mcp
-npm install
+npm ci
 npm run ingest   # downloads CSV (first run), builds local DuckDB + FTS index
 npm run build
 npm run verify   # optional: schema, count, search, SQL guard
@@ -72,7 +77,7 @@ User or project config (`.cursor/mcp.json` / `~/.cursor/mcp.json`):
 }
 ```
 
-You should see `ping`, `get_schema`, `query_tickets`, `search_tickets`, `get_ticket`, and `search_metrics`. If `ping` fails, fix MCP configuration before debugging SQL.
+You should see `ping`, `get_schema`, `query_tickets`, `search_tickets`, `get_ticket`, and `search_metrics`. If the server or `ping` is unavailable, verify the absolute path, build output (`dist/index.js`), and local ingest (`npm run ingest`) before debugging dataset queries.
 
 ### Claude Code
 
@@ -115,9 +120,9 @@ Cursor example file: [mcp.config.example.json](./mcp.config.example.json).
 | Breakdown by language and priority | `query_tickets` |
 | What are customers saying about refunds? | `search_tickets` |
 | Password-reset tickets in German (by language column) | `query_tickets`, or `search_tickets` with `language: "de"` and preferably `match_mode: "all"` (FTS is English-optimized) |
-| How many tickets mention refunds? | `search_metrics` |
-| High-priority tickets about password resets (examples) | `search_tickets` with filters |
-| How many tickets have the Refund tag? | `query_tickets` on `ticket_tags` |
+| How many tickets mention refunds? | `search_metrics` (lexical wording — not the Refund tag) |
+| High-priority tickets about password resets (examples) | `search_tickets` with filters; prefer `match_mode: "all"` for multi-word topics |
+| How many tickets have the Refund tag? | `query_tickets` on `ticket_tags` with `COUNT(DISTINCT ticket_id)` |
 
 Optional MCP prompt: `ticket-analyst` (reminder only — routing lives in tool contracts + `get_schema`).
 
