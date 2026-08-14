@@ -22,6 +22,10 @@ export type QueryTicketsResult = {
   rows: Record<string, unknown>[];
 };
 
+export type ExecuteReadOnlyQueryOptions = {
+  maxRows?: number;
+};
+
 function toJsonSafe(value: unknown): unknown {
   if (typeof value === "bigint") {
     const asNumber = Number(value);
@@ -59,11 +63,24 @@ function serializeResult(result: QueryTicketsResult): string {
   return JSON.stringify(result, null, 2);
 }
 
+function wrapWithRowLimit(sql: string, maxRows: number): string {
+  // Fetch one extra row so truncation can distinguish "exactly max" from "more".
+  return `SELECT * FROM (\n${sql}\n) AS _query_tickets LIMIT ${maxRows + 1}`;
+}
+
 export async function executeReadOnlyQuery(
   sql: string,
+  options: ExecuteReadOnlyQueryOptions = {},
 ): Promise<QueryTicketsResult> {
+  const maxRows = options.maxRows ?? MAX_SQL_ROWS;
+  if (!Number.isInteger(maxRows) || maxRows < 1) {
+    throw new Error("maxRows must be a positive integer.");
+  }
+
+  const limitedSql = wrapWithRowLimit(sql, maxRows);
+
   return withReadOnlyConnection(async (conn) => {
-    const rawRows = await all<Record<string, unknown>>(conn, sql);
+    const rawRows = await all<Record<string, unknown>>(conn, limitedSql);
 
     const reasons = new Set<TruncationReason>();
     let fieldsTruncated = false;
@@ -86,13 +103,10 @@ export async function executeReadOnlyQuery(
       reasons.add("fields");
     }
 
-    // Caller wraps with LIMIT max+1 so we can tell "exactly max" from "more than max".
-    if (safeRows.length > MAX_SQL_ROWS) {
+    if (safeRows.length > maxRows) {
       reasons.add("rows");
     }
-    let rows = reasons.has("rows")
-      ? safeRows.slice(0, MAX_SQL_ROWS)
-      : safeRows;
+    let rows = reasons.has("rows") ? safeRows.slice(0, maxRows) : safeRows;
 
     const build = (nextRows: Record<string, unknown>[]): QueryTicketsResult => {
       const truncationReasons = [...reasons];

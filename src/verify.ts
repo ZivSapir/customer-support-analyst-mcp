@@ -17,7 +17,7 @@ import {
 } from "./query.js";
 import { getTicketSchema } from "./schema.js";
 import { searchMetrics, searchTickets } from "./search.js";
-import { validateReadOnlySql, wrapWithRowLimit } from "./sql-guard.js";
+import { validateReadOnlySql } from "./sql-guard.js";
 import { getTicket } from "./ticket.js";
 import { TICKET_DATA_ENVELOPE } from "./trust.js";
 
@@ -51,9 +51,9 @@ async function queryScalarN(sql: string): Promise<number> {
     throw new Error(guard.error);
   }
 
-  const result = await executeReadOnlyQuery(
-    wrapWithRowLimit(guard.sql, MAX_SQL_ROWS),
-  );
+  const result = await executeReadOnlyQuery(guard.sql, {
+    maxRows: MAX_SQL_ROWS,
+  });
   return Number(result.rows[0]?.n);
 }
 
@@ -204,7 +204,7 @@ async function main(): Promise<void> {
   }
   let fsBlocked = false;
   try {
-    await executeReadOnlyQuery(wrapWithRowLimit(fsGuard.sql, MAX_SQL_ROWS));
+    await executeReadOnlyQuery(fsGuard.sql, { maxRows: MAX_SQL_ROWS });
   } catch {
     fsBlocked = true;
   }
@@ -217,9 +217,9 @@ async function main(): Promise<void> {
   if (!uncappedGuard.ok) {
     throw new Error(uncappedGuard.error);
   }
-  const capped = await executeReadOnlyQuery(
-    wrapWithRowLimit(uncappedGuard.sql, MAX_SQL_ROWS),
-  );
+  const capped = await executeReadOnlyQuery(uncappedGuard.sql, {
+    maxRows: MAX_SQL_ROWS,
+  });
   assert(
     capped.returnedRowCount === MAX_SQL_ROWS,
     `row cap should return ${MAX_SQL_ROWS} rows`,
@@ -239,9 +239,9 @@ async function main(): Promise<void> {
   if (!exactGuard.ok) {
     throw new Error(exactGuard.error);
   }
-  const exact = await executeReadOnlyQuery(
-    wrapWithRowLimit(exactGuard.sql, MAX_SQL_ROWS),
-  );
+  const exact = await executeReadOnlyQuery(exactGuard.sql, {
+    maxRows: MAX_SQL_ROWS,
+  });
   assert(
     exact.returnedRowCount === MAX_SQL_ROWS,
     `exact-${MAX_SQL_ROWS} query should return ${MAX_SQL_ROWS} rows`,
@@ -260,9 +260,9 @@ async function main(): Promise<void> {
   if (!fatGuard.ok) {
     throw new Error(fatGuard.error);
   }
-  const fat = await executeReadOnlyQuery(
-    wrapWithRowLimit(fatGuard.sql, MAX_SQL_ROWS),
-  );
+  const fat = await executeReadOnlyQuery(fatGuard.sql, {
+    maxRows: MAX_SQL_ROWS,
+  });
   const big = String(fat.rows[0]?.big ?? "");
   assert(big.length <= MAX_FIELD_CHARS, "fat string field should be capped");
   assert(big.endsWith("…[truncated]"), "fat string should include truncate marker");
@@ -281,9 +281,9 @@ async function main(): Promise<void> {
   if (!payloadGuard.ok) {
     throw new Error(payloadGuard.error);
   }
-  const bulky = await executeReadOnlyQuery(
-    wrapWithRowLimit(payloadGuard.sql, MAX_SQL_ROWS),
-  );
+  const bulky = await executeReadOnlyQuery(payloadGuard.sql, {
+    maxRows: MAX_SQL_ROWS,
+  });
   const bulkyJson = JSON.stringify(bulky, null, 2);
   assert(
     Buffer.byteLength(bulkyJson, "utf8") <= MAX_RESULT_BYTES,

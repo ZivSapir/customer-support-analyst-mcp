@@ -1,5 +1,4 @@
 import { executeReadOnlyQuery } from "./query.js";
-import { wrapWithRowLimit } from "./sql-guard.js";
 import { TICKET_DATA_ENVELOPE } from "./trust.js";
 
 export { TICKET_DATA_ENVELOPE };
@@ -18,10 +17,8 @@ export async function getTicket(ticketId: number): Promise<GetTicketResult> {
   }
 
   const result = await executeReadOnlyQuery(
-    wrapWithRowLimit(
-      `SELECT * FROM tickets WHERE ticket_id = ${ticketId}`,
-      1,
-    ),
+    `SELECT * FROM tickets WHERE ticket_id = ${ticketId}`,
+    { maxRows: 1 },
   );
 
   if (result.rows.length === 0) {
