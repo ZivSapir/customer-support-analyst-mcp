@@ -41,26 +41,54 @@ Architecture and rejected alternatives: [DECISIONS.md](./DECISIONS.md).
 ## Requirements
 
 - Node.js 20+
-- npm
+- npm (setup only — install / ingest / build / verify)
 - An MCP host (Cursor, Claude Code, or Codex)
 
 ## Quick start
+
+Three stages: **install** and **prepare** are yours; **connect** is the host spawning Node.
+
+### 1. Install
 
 ```bash
 git clone https://github.com/ZivSapir/customer-support-analyst-mcp.git
 cd customer-support-analyst-mcp
 npm ci
+```
+
+### 2. Prepare
+
+```bash
 npm run ingest   # downloads CSV (first run), builds local DuckDB + FTS index
-npm run build
-npm run verify   # optional: schema, count, search, SQL guard
-npm start        # stdio MCP server — normally the host spawns this
+npm run build    # compiles src/ → dist/index.js
+npm run verify   # optional: pinned smoke checks
 ```
 
 `data/` is gitignored. Each machine runs ingest locally against a **pinned** Hugging Face revision (see `src/dataset.ts`); the CSV checksum is verified and `data/ingest-manifest.json` records provenance.
 
+After this step you should have:
+
+- `data/tickets.duckdb`
+- `dist/index.js` (the MCP server entrypoint)
+
+### 3. Connect (ask questions in the host)
+
+Do **not** leave `npm start` running in a terminal to “use” the app. This is a **stdio MCP server**: Claude Code / Codex / Cursor **spawn** the process when they need tools:
+
+```text
+MCP host (Claude Code / Codex / Cursor)
+  → spawns:  node /ABSOLUTE/PATH/TO/customer-support-analyst-mcp/dist/index.js
+  → talks over stdin/stdout
+  → you ask natural-language questions in the host chat
+```
+
+Prefer configuring the host with **`node` + absolute path to `dist/index.js`** (not `npm start`), so the working directory cannot break startup.
+
+Optional: `npm start` is only a manual check that the process boots; it waits for an MCP client on stdin/stdout and is not the normal way to ask questions.
+
 ## MCP configuration
 
-Use the **absolute path** to this repo. After changing tools, restart the MCP server (or reload the window) so the host picks up the new tool list.
+Replace `/ABSOLUTE/PATH/TO/...` with the real path on that machine. After changing tools, restart/reload the MCP server in the host so it picks up the new tool list.
 
 ### Cursor
 
@@ -135,6 +163,6 @@ Full list of example questions (routing hints for operators — **not** an autom
 | `npm run ingest` | Pinned CSV → `data/tickets.duckdb` + FTS + ingest manifest |
 | `npm run peek` | Print columns + sample rows from local DuckDB |
 | `npm run build` | Compile `src/` → `dist/` |
-| `npm run dev` | Run the stdio server via `tsx` (development) |
-| `npm start` | Run the stdio server |
 | `npm run verify` | Pinned smoke checks (row counts, filters, FTS, SQL guard/FS, eval JSON shape) |
+| `npm run dev` | Run the stdio server via `tsx` (development) |
+| `npm start` | Alias for `node dist/index.js` — manual stdio boot check only; hosts should spawn Node themselves |
