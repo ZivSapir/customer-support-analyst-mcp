@@ -79,13 +79,13 @@ MCP host (Claude Code / Codex / Cursor)
   → you ask natural-language questions in the host chat
 ```
 
-Prefer configuring the host with **`node` + absolute path to `dist/index.js`** (not `npm start`), so the working directory cannot break startup.
+**Next step:** pick your host under [MCP configuration](#mcp-configuration) and paste that JSON/TOML block. Replace `/ABSOLUTE/PATH/TO/customer-support-analyst-mcp` with the real clone path on your machine (the folder that contains `dist/index.js` after `npm run build`). Prefer **`node` + that absolute `dist/index.js` path** (not `npm start`), so the working directory cannot break startup. Reload/restart MCP in the host, confirm the tools appear, then ask a question in chat.
 
 Optional: `npm start` is only a manual check that the process boots; it waits for an MCP client on stdin/stdout and is not the normal way to ask questions.
 
 ## MCP configuration
 
-Replace `/ABSOLUTE/PATH/TO/...` with the real path on that machine. After changing tools, restart/reload the MCP server in the host so it picks up the new tool list.
+Replace `/ABSOLUTE/PATH/TO/customer-support-analyst-mcp` with your clone path (example: `/Users/you/code/customer-support-analyst-mcp`). The `args` entry must point at `dist/index.js` inside that folder. After changing tools, restart/reload the MCP server in the host so it picks up the new tool list.
 
 ### Cursor
 
