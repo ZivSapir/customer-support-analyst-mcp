@@ -1,6 +1,6 @@
 # Customer Support Analyst MCP
 
-Local [Model Context Protocol](https://modelcontextprotocol.io) server for natural-language Q&A over a customer-support ticket dataset. Built for analysts and ops — not a customer-facing chatbot.
+Local [Model Context Protocol](https://modelcontextprotocol.io) server for natural-language Q&A over a customer-support ticket dataset. Built for analysts and ops - not a customer-facing chatbot.
 
 ## Model
 
@@ -8,14 +8,11 @@ This MCP server does **not** call an LLM itself. Natural-language planning is pe
 
 **Tested end-to-end with:**
 
-- Cursor Agent — Composer
+- Cursor Agent - Composer
 
-**Runnable with the assignment hosts** (same stdio server; configuration below):
+**Also runnable with** Claude Code and Codex (same stdio server; configuration below).
 
-- Claude Code
-- Codex
-
-No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The host’s configured model performs planning; this process only executes tools.
+No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The host's configured model performs planning; this process only executes tools.
 
 ## How it works
 
@@ -28,11 +25,11 @@ No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is required by this server. The host�
 | `get_ticket` | One ticket by id (detail after search; text marked untrusted) |
 | `search_metrics` | Lexical FTS match counts / group-bys for free-text queries |
 
-Structured counts come from `query_tickets` (including `ticket_tags` for label analytics). Match volumes come from `search_metrics` (lexical FTS only — **not** semantic topic prevalence). `search_tickets` hits are ranked examples, not volume — use `get_ticket` for body/answer. Ticket subject/body/answer are **untrusted model input**.
+Structured counts come from `query_tickets` (including `ticket_tags` for label analytics). Match volumes come from `search_metrics` (lexical FTS only - **not** semantic topic prevalence). `search_tickets` hits are ranked examples, not volume - use `get_ticket` for body/answer. Ticket subject/body/answer are **untrusted model input**.
 
-`get_schema` intentionally omits the 1,255-value tag vocabulary to keep first-call context small. Discover relevant tags through an aggregate `query_tickets` query on `ticket_tags` (use `COUNT(DISTINCT ticket_id)` for ticket counts). Wording questions (“mention/say/contain X”) use `search_metrics`; explicit labels use `ticket_tags` — do not treat one as the other.
+`get_schema` intentionally omits the 1,255-value tag vocabulary to keep first-call context small. Discover relevant tags through an aggregate `query_tickets` query on `ticket_tags` (use `COUNT(DISTINCT ticket_id)` for ticket counts). Wording questions ("mention/say/contain X") use `search_metrics`; explicit labels use `ticket_tags` - do not treat one as the other.
 
-FTS uses an inverted index, stemming, and BM25 ranking — better than SQL `LIKE` for examples, still **not** paraphrase/embedding search. Multi-word queries default to `match_mode: "any"` (at least one term); use `"all"` when every term should be present. Neither mode is exact phrase matching. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB’s default **English** analyzer, so German text search is best-effort.
+FTS uses an inverted index, stemming, and BM25 ranking - better than SQL `LIKE` for examples, still **not** paraphrase/embedding search. Multi-word queries default to `match_mode: "any"` (at least one term); use `"all"` when every term should be present. Neither mode is exact phrase matching. The dataset is EN+DE; SQL works for both languages. FTS uses DuckDB's default **English** analyzer, so German text search is best-effort.
 
 **Dataset:** [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets) (Hugging Face Support_Dataset; downloaded once at ingest).
 
@@ -41,7 +38,7 @@ Architecture and rejected alternatives: [DECISIONS.md](./DECISIONS.md).
 ## Requirements
 
 - Node.js 20+
-- npm (setup only — install / ingest / build / verify)
+- npm (setup only: install / ingest / build / verify)
 - An MCP host (Cursor, Claude Code, or Codex)
 
 ## Quick start
@@ -73,7 +70,7 @@ After this step you should have:
 
 ### 3. Connect (ask questions in the host)
 
-Do **not** leave `npm start` running in a terminal to “use” the app. This is a **stdio MCP server**: Claude Code / Codex / Cursor **spawn** the process when they need tools:
+Do **not** leave `npm start` running in a terminal to "use" the app. This is a **stdio MCP server**: Claude Code / Codex / Cursor **spawn** the process when they need tools:
 
 ```text
 MCP host (Claude Code / Codex / Cursor)
@@ -148,13 +145,13 @@ Cursor example file: [mcp.config.example.json](./mcp.config.example.json).
 | Breakdown by language and priority | `query_tickets` |
 | What are customers saying about refunds? | `search_tickets` |
 | Password-reset tickets in German (by language column) | `query_tickets`, or `search_tickets` with `language: "de"` and preferably `match_mode: "all"` (FTS is English-optimized) |
-| How many tickets mention refunds? | `search_metrics` (lexical wording — not the Refund tag) |
+| How many tickets mention refunds? | `search_metrics` (lexical wording - not the Refund tag) |
 | High-priority tickets about password resets (examples) | `search_tickets` with filters; prefer `match_mode: "all"` for multi-word topics |
 | How many tickets have the Refund tag? | `query_tickets` on `ticket_tags` with `COUNT(DISTINCT ticket_id)` |
 
-Optional MCP prompt: `ticket-analyst` (reminder only — routing lives in tool contracts + `get_schema`).
+Optional MCP prompt: `ticket-analyst` (reminder only - routing lives in tool contracts + `get_schema`).
 
-Full list of example questions (routing hints for operators — **not** an automated LLM eval harness): [eval/questions.json](./eval/questions.json). `npm run verify` checks that file’s shape and pinned DuckDB/FTS expectations.
+Full list of example questions (routing hints for operators - **not** an automated LLM eval harness): [eval/questions.json](./eval/questions.json). `npm run verify` checks that file's shape and pinned DuckDB/FTS expectations.
 
 ## Scripts
 
@@ -165,4 +162,4 @@ Full list of example questions (routing hints for operators — **not** an autom
 | `npm run build` | Compile `src/` → `dist/` |
 | `npm run verify` | Pinned smoke checks (row counts, filters, FTS, SQL guard/FS, eval JSON shape) |
 | `npm run dev` | Run the stdio server via `tsx` (development) |
-| `npm start` | Alias for `node dist/index.js` — manual stdio boot check only; hosts should spawn Node themselves |
+| `npm start` | Alias for `node dist/index.js` - manual stdio boot check only; hosts should spawn Node themselves |
